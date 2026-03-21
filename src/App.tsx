@@ -33,18 +33,109 @@ import {
   MapPin,
   ChevronDown,
   Calendar,
-  Hash
+  Hash,
+  Info,
+  AlertTriangle,
+  Microscope,
+  HeartPulse,
+  Layers
 } from 'lucide-react';
 import { cn } from './lib/utils';
-import { Screen, Disease, Procedure } from './types';
+import { Screen, Disease, Procedure, Medication } from './types';
 import { DISEASES, PROCEDURES } from './constants';
+import { supabase } from './lib/supabase';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [selectedDisease, setSelectedDisease] = useState<Disease | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [diseases, setDiseases] = useState<Disease[]>(DISEASES);
+  const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
+
+  // Auth Listener
+  useEffect(() => {
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      console.error('Supabase configuration missing!');
+      return;
+    }
+
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setIsLoggedIn(!!session);
+      } catch (err) {
+        console.error('Failed to fetch session:', err);
+      }
+    };
+
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch Profile
+  useEffect(() => {
+    if (session?.user) {
+      fetchProfile();
+    } else {
+      setProfile(null);
+    }
+  }, [session]);
+
+  async function fetchProfile() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (data) setProfile(data);
+      if (error) console.error('Error fetching profile:', error.message);
+    } catch (err) {
+      console.error('Network error fetching profile:', err);
+    }
+  }
+
+  // Fetch Data
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchData();
+    }
+  }, [isLoggedIn]);
+
+  async function fetchData() {
+    try {
+      const { data: diseasesData, error: diseasesError } = await supabase.from('diseases').select('*');
+      if (diseasesData) setDiseases(diseasesData);
+      if (diseasesError) console.error('Error fetching diseases:', diseasesError.message);
+
+      const { data: proceduresData, error: proceduresError } = await supabase.from('procedures').select('*');
+      if (proceduresData) setProcedures(proceduresData);
+      if (proceduresError) console.error('Error fetching procedures:', proceduresError.message);
+    } catch (err) {
+      console.error('Network error fetching data:', err);
+    }
+  }
+
+  // Redirect to login if not logged in
+  useEffect(() => {
+    if (!isLoggedIn && currentScreen !== 'signup' && currentScreen !== 'login') {
+      setCurrentScreen('login');
+    } else if (isLoggedIn && (currentScreen === 'login' || currentScreen === 'signup')) {
+      setCurrentScreen('home');
+    }
+  }, [isLoggedIn, currentScreen]);
 
   // Animation variants
   const pageVariants = {
@@ -58,16 +149,82 @@ export default function App() {
     ease: [0.22, 1, 0.36, 1],
   };
 
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const testSupabaseConnection = async () => {
+    setTestStatus('testing');
+    setTestError(null);
+    try {
+      const { error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setTestStatus('success');
+    } catch (err: any) {
+      console.error('Test connection failed:', err);
+      setTestStatus('error');
+      setTestError(err.message || 'Erro desconhecido');
+    }
+  };
+
   const renderScreen = () => {
+    const isSupabaseConfigured = 
+      import.meta.env.VITE_SUPABASE_URL && 
+      import.meta.env.VITE_SUPABASE_URL !== 'undefined' &&
+      import.meta.env.VITE_SUPABASE_ANON_KEY && 
+      import.meta.env.VITE_SUPABASE_ANON_KEY !== 'undefined' &&
+      !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+
+    if (!isSupabaseConfigured) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6 bg-surface">
+          <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-error/10 text-center">
+            <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-error" />
+            </div>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Configuração Necessária</h2>
+            <p className="text-on-surface-variant mb-6 leading-relaxed">
+              As variáveis de ambiente do Supabase não foram encontradas ou são inválidas. Para que o aplicativo funcione corretamente, você precisa configurá-las no menu <strong>Settings &gt; Environment Variables</strong>.
+            </p>
+            <div className="space-y-3 text-left bg-surface-container-low p-4 rounded-2xl border border-outline-variant/20 mb-6">
+              <p className="text-xs font-mono text-on-surface-variant"><span className="font-bold text-primary">VITE_SUPABASE_URL</span>: Sua URL do projeto (ex: https://xyz.supabase.co)</p>
+              <p className="text-xs font-mono text-on-surface-variant"><span className="font-bold text-primary">VITE_SUPABASE_ANON_KEY</span>: Sua chave anônima (anon key)</p>
+            </div>
+            
+            <button 
+              onClick={testSupabaseConnection}
+              disabled={testStatus === 'testing'}
+              className="w-full py-3 px-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary/90 transition-all disabled:opacity-50 mb-4"
+            >
+              {testStatus === 'testing' ? 'Testando...' : 'Testar Conexão'}
+            </button>
+
+            {testStatus === 'success' && (
+              <p className="text-sm text-success font-medium mb-4">Conexão bem-sucedida! Atualize a página.</p>
+            )}
+            {testStatus === 'error' && (
+              <div className="p-3 bg-error/10 rounded-xl mb-4">
+                <p className="text-xs text-error font-mono break-all leading-tight">{testError}</p>
+                <p className="text-[10px] text-error/70 mt-1">Verifique se a URL começa com https:// e se a chave está correta.</p>
+              </div>
+            )}
+
+            <p className="text-sm text-on-surface-variant italic">
+              Após configurar, a pré-visualização será atualizada automaticamente.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     switch (currentScreen) {
       case 'home':
-        return <HomeScreen onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} />;
+        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
       case 'diseases':
-        return <DiseasesScreen onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} />;
+        return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} />;
       case 'procedures':
-        return <ProceduresScreen onNavigate={setCurrentScreen} />;
+        return <ProceduresScreen procedures={procedures} onNavigate={setCurrentScreen} />;
       case 'profile':
-        return <ProfileScreen onLogout={() => { setIsLoggedIn(false); setCurrentScreen('login'); }} />;
+        return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
       case 'signup':
@@ -75,15 +232,15 @@ export default function App() {
       case 'login':
         return <LoginScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} />;
       default:
-        return <HomeScreen onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} />;
+        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col max-w-7xl mx-auto relative overflow-hidden">
-      {/* Background Decorations */}
-      <div className="fixed top-0 right-0 -z-10 w-1/3 h-1/2 bg-gradient-to-bl from-primary-fixed/20 to-transparent blur-3xl opacity-50" />
-      <div className="fixed bottom-0 left-0 -z-10 w-1/4 h-1/3 bg-gradient-to-tr from-secondary-container/20 to-transparent blur-3xl opacity-50" />
+    <div className="min-h-screen bg-surface flex flex-col relative overflow-hidden">
+      {/* Background Decorations - Lightened */}
+      <div className="fixed top-0 right-0 -z-10 w-1/3 h-1/2 bg-gradient-to-bl from-primary-fixed/5 to-transparent blur-3xl opacity-20" />
+      <div className="fixed bottom-0 left-0 -z-10 w-1/4 h-1/3 bg-gradient-to-tr from-secondary-container/5 to-transparent blur-3xl opacity-20" />
 
       {/* Sidebar Overlay */}
       <AnimatePresence>
@@ -94,7 +251,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm"
+              className="fixed inset-0 bg-white/20 z-[60] backdrop-blur-[2px]"
             />
             <motion.aside
               initial={{ x: '-100%' }}
@@ -105,7 +262,7 @@ export default function App() {
             >
               <div className="flex items-center justify-between">
                 <span className="font-headline font-bold text-xl tracking-tighter text-primary">
-                  Santuário Clínico
+                  Biblioteca da Saúde
                 </span>
                 <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-full hover:bg-surface-container-low">
                   <ArrowLeft className="w-5 h-5 text-on-surface" />
@@ -168,8 +325,8 @@ export default function App() {
 
               {/* Center: Brand Name (Modern Typography) */}
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/50 leading-none mb-0.5">Santuário</span>
-                <span className="font-headline font-black text-lg tracking-tighter text-primary leading-none">CLÍNICO</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/50 leading-none mb-0.5">Biblioteca da</span>
+                <span className="font-headline font-black text-lg tracking-tighter text-primary leading-none">SAÚDE</span>
               </div>
 
               {/* Right: Notifications */}
@@ -199,7 +356,7 @@ export default function App() {
       {/* Main Content */}
       <main className={cn(
         "flex-1",
-        currentScreen !== 'login' && currentScreen !== 'signup' ? "pt-[124px] pb-24" : ""
+        currentScreen !== 'login' && currentScreen !== 'signup' ? "pt-[140px] pb-28" : ""
       )}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -272,7 +429,7 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
       onClick={onClick}
       className={cn(
         "w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 text-left",
-        active ? "bg-primary text-on-primary shadow-md" : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+        active ? "bg-primary-fixed text-on-primary-fixed shadow-sm" : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
       )}
     >
       {icon}
@@ -283,25 +440,25 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 // --- Screens ---
 
-function HomeScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void }) {
+function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any }) {
   return (
     <div className="px-6 py-4 space-y-10">
       <section>
         <h1 className="font-headline text-[2.75rem] font-extrabold leading-tight tracking-tight text-on-surface">
           Bem-vindo de volta,<br />
-          <span className="text-primary">Dr. Carlos</span>
+          <span className="text-primary">{profile?.full_name?.split(' ')[0] || 'Profissional'}</span>
         </h1>
         <p className="text-on-surface-variant font-medium mt-2">Segunda-feira, 12 de Junho • 4 Revisões Agendadas</p>
       </section>
 
       <section className="grid grid-cols-2 gap-4">
-        <div className="col-span-2 bg-gradient-to-br from-primary to-primary-container p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+        <div className="col-span-2 bg-gradient-to-br from-primary-fixed to-secondary-fixed p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
           <div className="relative z-10">
-            <Activity className="w-8 h-8 text-white mb-4" />
-            <h3 className="font-headline text-xl font-bold text-white">Busca Rápida de Doenças</h3>
-            <p className="text-white/80 text-sm mt-1">Acesse mais de 1.200 protocolos clínicos</p>
+            <Activity className="w-8 h-8 text-on-primary-fixed mb-4" />
+            <h3 className="font-headline text-xl font-bold text-on-primary-fixed">Busca Rápida de Doenças</h3>
+            <p className="text-on-primary-fixed/80 text-sm mt-1">Acesse mais de 1.200 protocolos clínicos</p>
           </div>
-          <Search className="absolute -right-4 -bottom-4 w-32 h-32 text-white/10" />
+          <Search className="absolute -right-4 -bottom-4 w-32 h-32 text-on-primary-fixed/10" />
         </div>
 
         <div 
@@ -328,7 +485,7 @@ function HomeScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Screen) =
           <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
         </div>
         <div className="space-y-4">
-          {DISEASES.slice(0, 3).map((disease) => (
+          {diseases.slice(0, 3).map((disease) => (
             <div 
               key={disease.id}
               onClick={() => onSelectDisease(disease)}
@@ -361,7 +518,7 @@ function HomeScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Screen) =
   );
 }
 
-function DiseasesScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void }) {
+function DiseasesScreen({ diseases, onNavigate, onSelectDisease }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void }) {
   const [filter, setFilter] = useState('Todas');
   const categories = ['Todas', 'Crônicas', 'Infecciosas', 'Neurológicas'];
 
@@ -372,8 +529,8 @@ function DiseasesScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Scree
   };
 
   const filteredDiseases = filter === 'Todas' 
-    ? DISEASES 
-    : DISEASES.filter(d => d.type === (filter === 'Crônicas' ? 'Chronic' : filter === 'Infecciosas' ? 'Infectious' : 'Neurological'));
+    ? diseases 
+    : diseases.filter(d => d.type === (filter === 'Crônicas' ? 'Chronic' : filter === 'Infecciosas' ? 'Infectious' : 'Neurological'));
 
   return (
     <div className="px-6 py-4 space-y-8">
@@ -438,7 +595,7 @@ function DiseasesScreen({ onNavigate, onSelectDisease }: { onNavigate: (s: Scree
   );
 }
 
-function ProceduresScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+function ProceduresScreen({ procedures, onNavigate }: { procedures: Procedure[], onNavigate: (s: Screen) => void }) {
   return (
     <div className="px-6 py-4 space-y-8">
       <section>
@@ -463,7 +620,7 @@ function ProceduresScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           <span className="text-xs font-semibold uppercase tracking-widest text-primary cursor-pointer">Ver Tudo</span>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {PROCEDURES.map((proc) => (
+          {procedures.map((proc) => (
             <div 
               key={proc.id}
               className="bg-surface-container-low rounded-3xl p-5 border-l-4 border-secondary flex flex-col justify-between aspect-square group active:scale-95 transition-all cursor-pointer"
@@ -521,81 +678,183 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
     'Neurological': 'Neurológica'
   };
 
+  const sections = [
+    { label: 'Descrição', content: disease.description, icon: <Info className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { 
+      label: 'Tipos / Subtipos', 
+      content: disease.subtypes || null, 
+      icon: <Layers className="w-5 h-5" />, 
+      color: 'text-cyan-500', 
+      bg: 'bg-cyan-50',
+      show: !!disease.subtypes 
+    },
+    { label: 'Sintomas', content: disease.symptoms, icon: <Activity className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: 'Causas', content: disease.causes, icon: <Microscope className="w-5 h-5" />, color: 'text-purple-500', bg: 'bg-purple-50' },
+    { label: 'Diagnóstico', content: disease.diagnosis, icon: <Stethoscope className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { label: 'Tratamento', content: disease.treatment, icon: <Activity className="w-5 h-5" />, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { 
+      label: 'Medicamentos', 
+      content: disease.medications || null, 
+      icon: <Pill className="w-5 h-5" />, 
+      color: 'text-pink-500', 
+      bg: 'bg-pink-50',
+      isMedication: true,
+      show: !!disease.medications 
+    },
+    { label: 'Complicações', content: disease.complications, icon: <AlertTriangle className="w-5 h-5" />, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { label: 'Cuidados de enfermagem', content: disease.nursingCare, icon: <HeartPulse className="w-5 h-5" />, color: 'text-indigo-500', bg: 'bg-indigo-50' },
+    { label: 'Prevenção', content: disease.prevention, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-teal-500', bg: 'bg-teal-50' },
+  ].filter(s => s.show !== false);
+
   return (
-    <div className="px-6 py-4 space-y-10">
-      <section>
-        <div className="relative overflow-hidden rounded-[2rem] aspect-[4/3] mb-6 ambient-shadow">
+    <div className="px-6 py-4 space-y-8 pb-32">
+      {/* Header Image with Floating Badge */}
+      <section className="relative">
+        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] ambient-shadow group">
           <img 
-            src={`https://picsum.photos/seed/${disease.name}/800/600`} 
+            src={`https://picsum.photos/seed/${disease.name}/800/500`} 
             alt={disease.name} 
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent" />
-          <div className="absolute bottom-6 left-6 right-6">
-            <span className="inline-block px-3 py-1 bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase tracking-widest rounded-full mb-2">
-              Doença {typeLabels[disease.type] || disease.type}
-            </span>
-            <h2 className="font-headline text-2xl font-extrabold text-white tracking-tight">{disease.name}</h2>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          
+          <div className="absolute top-6 left-6">
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
+                {typeLabels[disease.type] || disease.type}
+              </span>
+            </motion.div>
           </div>
-        </div>
-        <p className="text-on-surface-variant leading-relaxed text-sm">
-          {disease.description}
-        </p>
-      </section>
 
-      <section>
-        <div className="flex justify-between items-end mb-5">
-          <h3 className="font-headline text-lg font-bold text-on-surface">Apresentação Clínica</h3>
-          <span className="text-primary text-xs font-semibold">4 Indicadores Principais</span>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-surface-container-lowest p-5 rounded-2xl ambient-shadow flex flex-col items-start gap-3 border-l-4 border-secondary">
-            <Thermometer className="w-6 h-6 text-secondary" />
-            <div>
-              <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Febre</p>
-              <p className="text-sm font-bold text-on-surface">38.5°C - 40°C</p>
+          <div className="absolute bottom-8 left-8 right-8">
+            <motion.h2 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="font-headline text-4xl font-black text-white tracking-tighter leading-none mb-2"
+            >
+              {disease.name}
+            </motion.h2>
+            <div className="flex items-center gap-2 text-white/60 text-xs font-bold uppercase tracking-widest">
+              <span className="w-8 h-[1px] bg-white/30" />
+              Protocolo Clínico Verificado
             </div>
-          </div>
-          <div className="bg-surface-container-lowest p-5 rounded-2xl ambient-shadow flex flex-col items-start gap-3 border-l-4 border-secondary">
-            <Wind className="w-6 h-6 text-secondary" />
-            <div>
-              <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Dispneia</p>
-              <p className="text-sm font-bold text-on-surface">Falta de ar</p>
-            </div>
-          </div>
-          <div className="col-span-2 bg-surface-container-lowest p-5 rounded-2xl ambient-shadow flex items-center justify-between border-l-4 border-secondary">
-            <div className="flex flex-col gap-1">
-              <p className="text-[10px] font-bold text-outline uppercase tracking-wider">Tosse Produtiva</p>
-              <p className="text-sm font-bold text-on-surface">Muco amarelo, verde ou com sangue</p>
-            </div>
-            <Menu className="w-6 h-6 text-secondary rotate-90" />
           </div>
         </div>
       </section>
 
-      <section className="bg-primary p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Stethoscope className="w-32 h-32" />
+      {/* Bento Grid Sections */}
+      <div className="grid grid-cols-1 gap-4">
+        {sections.map((section, idx) => (
+          <motion.section 
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+            className="group bg-surface-container-lowest p-6 rounded-[2rem] ambient-shadow border border-outline-variant/5 hover:border-primary/20 transition-all duration-300"
+          >
+            <div className="flex items-start gap-4">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 duration-300",
+                section.bg,
+                section.color
+              )}>
+                {section.icon}
+              </div>
+              <div className="space-y-2 flex-1">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-outline group-hover:text-primary transition-colors">
+                  {section.label}
+                </h3>
+                {section.isMedication ? (
+                  <div className="space-y-3 w-full mt-2">
+                    {(section.content as Medication[]).map((med, i) => (
+                      <div key={i} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20 space-y-3 hover:bg-surface-container transition-colors duration-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-6 rounded-full bg-pink-500" />
+                          <h4 className="font-bold text-on-surface text-base tracking-tight">{med.name}</h4>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4">
+                          <div className="flex gap-3">
+                            <div className="w-px bg-outline-variant/30" />
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-outline/80">Posologia</span>
+                              <p className="text-sm text-on-surface-variant font-medium leading-snug">{med.posology}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-3">
+                            <div className="w-px bg-rose-500/20" />
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-rose-500/70">Contraindicação</span>
+                              <p className="text-sm text-on-surface-variant font-medium italic leading-snug">{med.contraindications}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : Array.isArray(section.content) ? (
+                  <ul className="list-disc pl-4 space-y-1.5">
+                    {section.content.map((item, i) => (
+                      <li key={i} className="text-on-surface-variant leading-relaxed text-sm font-medium">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : typeof section.content === 'object' && section.content !== null ? (
+                  <div className="space-y-4">
+                    {Object.entries(section.content as Record<string, string[]>).map(([subtype, items], i) => (
+                      <div key={i} className="space-y-2">
+                        <h4 className="text-[10px] font-bold text-primary uppercase tracking-widest bg-primary/5 px-2 py-1 rounded inline-block">
+                          {subtype}
+                        </h4>
+                        <ul className="list-disc pl-4 space-y-1.5">
+                          {items.map((item, j) => (
+                            <li key={j} className="text-on-surface-variant leading-relaxed text-sm font-medium">
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-on-surface-variant leading-relaxed text-sm font-medium">
+                    {section.content as string}
+                  </p>
+                )}
+              </div>
+            </div>
+          </motion.section>
+        ))}
+      </div>
+
+      {/* Action Card */}
+      <motion.section 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-primary p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden"
+      >
+        <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
+          <ShieldCheck className="w-64 h-64" />
         </div>
-        <div className="flex items-center gap-2 mb-4">
-          <CheckCircle2 className="w-6 h-6 text-secondary-container" />
-          <h3 className="font-headline text-xl font-bold">Plano de Cuidados de Enfermagem</h3>
+        
+        <div className="relative z-10 text-center">
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-xl rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <ShieldCheck className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="font-headline text-2xl font-black mb-3 tracking-tight">Protocolo de Segurança</h3>
+          <p className="text-white/70 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
+            Este guia segue rigorosamente as diretrizes da OMS e do Ministério da Saúde.
+          </p>
+          <button className="w-full py-5 bg-white text-primary font-black rounded-2xl text-xs uppercase tracking-[0.2em] active:scale-95 transition-all shadow-xl hover:shadow-white/10">
+            Baixar PDF Completo
+          </button>
         </div>
-        <ul className="space-y-4 relative z-10">
-          <li className="flex gap-3">
-            <CheckCircle2 className="w-4 h-4 text-secondary-container mt-1 shrink-0" />
-            <p className="text-sm font-medium"><span className="font-bold">Manejo das Vias Aéreas:</span> Incentive mudanças frequentes de posição e exercícios de respiração profunda.</p>
-          </li>
-          <li className="flex gap-3">
-            <CheckCircle2 className="w-4 h-4 text-secondary-container mt-1 shrink-0" />
-            <p className="text-sm font-medium"><span className="font-bold">Balanço Hídrico:</span> Mantenha a hidratação para ajudar a fluidificar as secreções pulmonares para facilitar a expectoração.</p>
-          </li>
-        </ul>
-        <button className="mt-6 w-full py-4 bg-secondary-container text-on-secondary-container font-bold rounded-2xl text-xs uppercase tracking-widest active:scale-95 transition-transform">
-          Marcar como Lido
-        </button>
-      </section>
+      </motion.section>
     </div>
   );
 }
@@ -644,6 +903,12 @@ const YEARS = Array.from({ length: 121 }, (_, i) => (new Date().getFullYear() - 
 function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void, onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [category, setCategory] = useState('');
   const [otherCategory, setOtherCategory] = useState('');
   const [birthDay, setBirthDay] = useState('');
@@ -655,11 +920,78 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const categoryRef = useRef<HTMLDivElement>(null);
   const countryRef = useRef<HTMLDivElement>(null);
   const monthRef = useRef<HTMLDivElement>(null);
   const yearRef = useRef<HTMLDivElement>(null);
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: signupError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          }
+        }
+      });
+
+      if (signupError) {
+        if (signupError.message.includes('fetch')) {
+          setError('Erro de conexão: Não foi possível alcançar o Supabase. Verifique se a URL e a Chave Anon estão corretas nas configurações.');
+        } else {
+          setError(signupError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Update profile with extra info
+        const birthDate = birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null;
+        
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            birth_date: birthDate,
+            category,
+            other_category: otherCategory,
+            phone: `${selectedCountry.code} ${phone}`,
+            address,
+          })
+          .eq('id', data.user.id);
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError.message);
+          // Don't block the user if profile update fails, but log it
+        }
+        
+        onLogin();
+        onNavigate('home');
+      }
+    } catch (err: any) {
+      console.error('Signup network error:', err);
+      const msg = err?.message || '';
+      if (msg.includes('fetch')) {
+        setError('Erro de rede: Falha ao conectar ao Supabase. Verifique sua conexão e as variáveis de ambiente.');
+      } else {
+        setError('Ocorreu um erro inesperado ao criar sua conta.');
+      }
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const day = parseInt(birthDay);
@@ -706,7 +1038,7 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-[100dvh] flex items-center justify-center px-4 py-12 bg-surface">
       <div className="grid lg:grid-cols-2 gap-12 max-w-6xl w-full items-center">
         <div className="hidden lg:flex flex-col gap-8 pr-12">
           <div className="space-y-4">
@@ -738,13 +1070,34 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
               <h2 className="font-headline text-xl font-bold text-on-surface mb-1">Criar Conta</h2>
               <p className="text-on-surface-variant text-xs font-medium">Por favor, insira seus dados para começar.</p>
             </div>
-            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); onLogin(); onNavigate('home'); }}>
+            <form className="space-y-5" onSubmit={handleSignup}>
+              {error && (
+                <div className="p-4 bg-error-container/10 border border-error/20 rounded-2xl text-error text-sm font-medium flex flex-col gap-2">
+                  <p>{error}</p>
+                  {error.includes('Supabase') && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        // We can't force the warning screen if variables exist, 
+                        // but we can at least tell the user to check them.
+                        alert('Por favor, verifique se a URL e a Chave Anon estão corretas no menu Settings > Environment Variables.');
+                      }}
+                      className="text-xs underline hover:text-error/80 transition-all font-bold text-left"
+                    >
+                      Como configurar o Supabase?
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider ml-1">Nome Completo</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type="text" 
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     placeholder="João Silva"
                     className="w-full pl-12 pr-4 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -936,6 +1289,9 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type="email" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="você@gmail.com"
                     className="w-full pl-12 pr-4 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -989,6 +1345,8 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                     <input 
                       type="tel" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                       placeholder="98765-4321"
                       className="w-full pl-12 pr-4 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                     />
@@ -1002,6 +1360,8 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type="text" 
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                     placeholder="Rua das Flores, 123 - São Paulo, SP"
                     className="w-full pl-12 pr-4 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -1013,6 +1373,9 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type={showPassword ? "text" : "password"} 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full pl-12 pr-12 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -1032,6 +1395,9 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type={showConfirmPassword ? "text" : "password"} 
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full pl-12 pr-12 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -1048,10 +1414,11 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
               <div className="pt-4">
                 <button 
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold rounded-2xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  disabled={loading}
+                  className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold rounded-2xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Criar Conta
-                  <ArrowRight className="w-5 h-5" />
+                  {loading ? 'Criando Conta...' : 'Criar Conta'}
+                  {!loading && <ArrowRight className="w-5 h-5" />}
                 </button>
               </div>
             </form>
@@ -1072,20 +1439,20 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
   );
 }
 
-function ProfileScreen({ onLogout }: { onLogout: () => void }) {
+function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => void }) {
   return (
     <div className="px-6 py-4 space-y-8">
       <section className="text-center">
         <div className="w-24 h-24 rounded-full bg-primary-fixed mx-auto mb-4 overflow-hidden border-4 border-white shadow-md">
            <img 
-            src="https://picsum.photos/seed/doctor/200" 
-            alt="Dr. Carlos" 
+            src={`https://picsum.photos/seed/${profile?.id || 'doc'}/200`} 
+            alt={profile?.full_name || "Perfil"} 
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
         </div>
-        <h2 className="font-headline text-2xl font-bold text-on-surface">Dr. Carlos Oliveira</h2>
-        <p className="text-on-surface-variant font-medium">Médico Clínico Geral • CRM 12345-SP</p>
+        <h2 className="font-headline text-2xl font-bold text-on-surface">{profile?.full_name || 'Carregando...'}</h2>
+        <p className="text-on-surface-variant font-medium">{CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} {profile?.other_category ? `(${profile.other_category})` : ''}</p>
       </section>
 
       <section className="space-y-4">
@@ -1136,9 +1503,47 @@ function ProfileScreen({ onLogout }: { onLogout: () => void }) {
 
 function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void, onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        if (error.message.includes('fetch')) {
+          setError('Erro de conexão: Não foi possível alcançar o Supabase. Verifique se a URL e a Chave Anon estão corretas nas configurações.');
+        } else {
+          setError(error.message);
+        }
+        setLoading(false);
+      } else {
+        onLogin();
+        onNavigate('home');
+      }
+    } catch (err: any) {
+      console.error('Login network error:', err);
+      const msg = err?.message || '';
+      if (msg.includes('fetch')) {
+        setError('Erro de rede: Falha ao conectar ao Supabase. Verifique sua conexão e as variáveis de ambiente.');
+      } else {
+        setError('Ocorreu um erro inesperado ao fazer login.');
+      }
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-[100dvh] flex items-center justify-center px-4 py-12 bg-surface">
       <div className="grid lg:grid-cols-2 gap-12 max-w-6xl w-full items-center">
         <div className="hidden lg:flex flex-col gap-8 pr-12">
           <div className="space-y-4">
@@ -1168,13 +1573,32 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
               <h2 className="font-headline text-2xl font-bold text-on-surface mb-2">Bem-vindo de volta</h2>
               <p className="text-on-surface-variant text-sm font-medium">Por favor, insira suas credenciais para continuar</p>
             </div>
-            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); onLogin(); onNavigate('home'); }}>
+            <form className="space-y-5" onSubmit={handleLogin}>
+              {error && (
+                <div className="p-4 bg-error-container/10 border border-error/20 rounded-2xl text-error text-sm font-medium flex flex-col gap-2">
+                  <p>{error}</p>
+                  {error.includes('Supabase') && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        alert('Por favor, verifique se a URL e a Chave Anon estão corretas no menu Settings > Environment Variables.');
+                      }}
+                      className="text-xs underline hover:text-error/80 transition-all font-bold text-left"
+                    >
+                      Como configurar o Supabase?
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider ml-1">Endereço de E-mail</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type="email" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="você@gmail.com"
                     className="w-full pl-12 pr-4 py-4 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -1186,6 +1610,9 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
                   <input 
                     type={showPassword ? "text" : "password"} 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full pl-12 pr-12 py-4 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
@@ -1208,10 +1635,11 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
               <div className="pt-4">
                 <button 
                   type="submit"
-                  className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold rounded-2xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  disabled={loading}
+                  className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold rounded-2xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Entrar
-                  <LogIn className="w-5 h-5" />
+                  {loading ? 'Entrando...' : 'Entrar'}
+                  {!loading && <LogIn className="w-5 h-5" />}
                 </button>
               </div>
             </form>
