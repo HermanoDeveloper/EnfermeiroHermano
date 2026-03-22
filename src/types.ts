@@ -1,4 +1,4 @@
-export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'login' | 'signup';
+export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'login' | 'signup' | 'ai-assistant';
 
 export interface Medication {
   name: string;

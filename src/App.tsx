@@ -38,12 +38,14 @@ import {
   AlertTriangle,
   Microscope,
   HeartPulse,
-  Layers
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { Screen, Disease, Procedure, Medication } from './types';
 import { DISEASES, PROCEDURES } from './constants';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { AIAssistantScreen } from './components/AIAssistantScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
@@ -55,21 +57,44 @@ export default function App() {
   const [profile, setProfile] = useState<any>(null);
   const [diseases, setDiseases] = useState<Disease[]>(DISEASES);
   const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
+  const [configError, setConfigError] = useState(!isSupabaseConfigured);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
 
   // Auth Listener
   useEffect(() => {
-    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      console.error('Supabase configuration missing!');
+    if (!isSupabaseConfigured) {
+      console.error('Supabase configuration missing or invalid!');
+      setConfigError(true);
+      setIsInitializing(false);
       return;
     }
 
     const initSession = async () => {
+      console.log('Initializing session...');
+      const timeoutId = setTimeout(() => {
+        if (isInitializing) {
+          console.warn('Session initialization taking too long...');
+          setTestError('Não foi possível conectar ao servidor. Por favor, tente novamente.');
+          setTestStatus('error');
+        }
+      }, 10000);
+
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        clearTimeout(timeoutId);
+        console.log('Session initialized:', !!session);
+        if (error) throw error;
         setSession(session);
         setIsLoggedIn(!!session);
       } catch (err) {
         console.error('Failed to fetch session:', err);
+        if (err instanceof Error && err.message.includes('fetch')) {
+          setConfigError(true);
+        }
+      } finally {
+        setIsInitializing(false);
       }
     };
 
@@ -149,9 +174,6 @@ export default function App() {
     ease: [0.22, 1, 0.36, 1],
   };
 
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testError, setTestError] = useState<string | null>(null);
-
   const testSupabaseConnection = async () => {
     setTestStatus('testing');
     setTestError(null);
@@ -159,58 +181,46 @@ export default function App() {
       const { error } = await supabase.auth.getSession();
       if (error) throw error;
       setTestStatus('success');
+      setConfigError(false);
     } catch (err: any) {
       console.error('Test connection failed:', err);
       setTestStatus('error');
-      setTestError(err.message || 'Erro desconhecido');
+      setTestError('Erro ao tentar reconectar. Verifique sua internet.');
     }
   };
 
   const renderScreen = () => {
-    const isSupabaseConfigured = 
-      import.meta.env.VITE_SUPABASE_URL && 
-      import.meta.env.VITE_SUPABASE_URL !== 'undefined' &&
-      import.meta.env.VITE_SUPABASE_ANON_KEY && 
-      import.meta.env.VITE_SUPABASE_ANON_KEY !== 'undefined' &&
-      !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+    if (isInitializing) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-surface">
+          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-6" />
+          <p className="text-on-surface-variant font-medium animate-pulse">Iniciando Biblioteca da Saúde...</p>
+        </div>
+      );
+    }
 
-    if (!isSupabaseConfigured) {
+    if (configError) {
       return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-surface">
           <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-error/10 text-center">
             <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-8 h-8 text-error" />
             </div>
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Configuração Necessária</h2>
-            <p className="text-on-surface-variant mb-6 leading-relaxed">
-              As variáveis de ambiente do Supabase não foram encontradas ou são inválidas. Para que o aplicativo funcione corretamente, você precisa configurá-las no menu <strong>Settings &gt; Environment Variables</strong>.
-            </p>
-            <div className="space-y-3 text-left bg-surface-container-low p-4 rounded-2xl border border-outline-variant/20 mb-6">
-              <p className="text-xs font-mono text-on-surface-variant"><span className="font-bold text-primary">VITE_SUPABASE_URL</span>: Sua URL do projeto (ex: https://xyz.supabase.co)</p>
-              <p className="text-xs font-mono text-on-surface-variant"><span className="font-bold text-primary">VITE_SUPABASE_ANON_KEY</span>: Sua chave anônima (anon key)</p>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ops! Algo deu errado</h2>
+            
+            <div className="p-4 bg-error/5 rounded-2xl mb-6 text-center border border-error/10">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
+                Não foi possível estabelecer uma conexão estável com o servidor no momento. Por favor, tente novamente em alguns instantes.
+              </p>
             </div>
             
             <button 
               onClick={testSupabaseConnection}
               disabled={testStatus === 'testing'}
-              className="w-full py-3 px-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary/90 transition-all disabled:opacity-50 mb-4"
+              className="w-full py-3 px-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {testStatus === 'testing' ? 'Testando...' : 'Testar Conexão'}
+              {testStatus === 'testing' ? 'Tentando reconectar...' : 'Tentar Novamente'}
             </button>
-
-            {testStatus === 'success' && (
-              <p className="text-sm text-success font-medium mb-4">Conexão bem-sucedida! Atualize a página.</p>
-            )}
-            {testStatus === 'error' && (
-              <div className="p-3 bg-error/10 rounded-xl mb-4">
-                <p className="text-xs text-error font-mono break-all leading-tight">{testError}</p>
-                <p className="text-[10px] text-error/70 mt-1">Verifique se a URL começa com https:// e se a chave está correta.</p>
-              </div>
-            )}
-
-            <p className="text-sm text-on-surface-variant italic">
-              Após configurar, a pré-visualização será atualizada automaticamente.
-            </p>
           </div>
         </div>
       );
@@ -227,6 +237,8 @@ export default function App() {
         return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
+      case 'ai-assistant':
+        return <AIAssistantScreen onBack={() => setCurrentScreen('home')} />;
       case 'signup':
         return <SignupScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} />;
       case 'login':
@@ -286,6 +298,7 @@ export default function App() {
 
               <nav className="flex-1 space-y-2">
                 <SidebarItem icon={<Home className="w-5 h-5" />} label="Painel Principal" onClick={() => { setCurrentScreen('home'); setIsSidebarOpen(false); }} active={currentScreen === 'home'} />
+                <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Assistente IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
                 <SidebarItem icon={<Activity className="w-5 h-5" />} label="Protocolos Clínicos" onClick={() => { setCurrentScreen('diseases'); setIsSidebarOpen(false); }} active={currentScreen === 'diseases'} />
                 <SidebarItem icon={<Stethoscope className="w-5 h-5" />} label="Procedimentos" onClick={() => { setCurrentScreen('procedures'); setIsSidebarOpen(false); }} active={currentScreen === 'procedures'} />
                 <SidebarItem icon={<ShieldCheck className="w-5 h-5" />} label="Segurança" onClick={() => setIsSidebarOpen(false)} />
@@ -459,6 +472,20 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
             <p className="text-on-primary-fixed/80 text-sm mt-1">Acesse mais de 1.200 protocolos clínicos</p>
           </div>
           <Search className="absolute -right-4 -bottom-4 w-32 h-32 text-on-primary-fixed/10" />
+        </div>
+
+        <div 
+          onClick={() => onNavigate('ai-assistant')}
+          className="col-span-2 bg-primary-fixed p-5 rounded-3xl flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all ambient-shadow"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-white/50 flex items-center justify-center shadow-sm">
+            <Sparkles className="w-6 h-6 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-headline font-bold text-on-primary-fixed">Assistente de Medicamentos</h3>
+            <p className="text-xs text-on-primary-fixed/70">Consulte o Formulário Nacional de Medicamentos</p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-on-primary-fixed/50" />
         </div>
 
         <div 
@@ -930,6 +957,7 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Signup attempt started for:', email);
     if (password !== confirmPassword) {
       setError('As senhas não coincidem.');
       return;
@@ -938,6 +966,7 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
     setError(null);
 
     try {
+      console.log('Calling supabase.auth.signUp...');
       const { data, error: signupError } = await supabase.auth.signUp({
         email,
         password,
@@ -947,13 +976,10 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
           }
         }
       });
+      console.log('supabase.auth.signUp response:', { data, error: signupError });
 
       if (signupError) {
-        if (signupError.message.includes('fetch')) {
-          setError('Erro de conexão: Não foi possível alcançar o Supabase. Verifique se a URL e a Chave Anon estão corretas nas configurações.');
-        } else {
-          setError(signupError.message);
-        }
+        setError('Erro ao tentar criar conta. Por favor, verifique sua conexão.');
         setLoading(false);
         return;
       }
@@ -982,13 +1008,8 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
         onNavigate('home');
       }
     } catch (err: any) {
-      console.error('Signup network error:', err);
-      const msg = err?.message || '';
-      if (msg.includes('fetch')) {
-        setError('Erro de rede: Falha ao conectar ao Supabase. Verifique sua conexão e as variáveis de ambiente.');
-      } else {
-        setError('Ocorreu um erro inesperado ao criar sua conta.');
-      }
+      console.error('Signup error:', err);
+      setError('Ocorreu um erro ao criar sua conta. Tente novamente.');
       setLoading(false);
     }
   };
@@ -1510,34 +1531,28 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Login attempt started for:', email);
     setLoading(true);
     setError(null);
 
     try {
+      console.log('Calling supabase.auth.signInWithPassword...');
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      console.log('supabase.auth.signInWithPassword response:', { error });
 
       if (error) {
-        if (error.message.includes('fetch')) {
-          setError('Erro de conexão: Não foi possível alcançar o Supabase. Verifique se a URL e a Chave Anon estão corretas nas configurações.');
-        } else {
-          setError(error.message);
-        }
+        setError('Erro ao tentar entrar na conta. Por favor, verifique suas credenciais e conexão.');
         setLoading(false);
       } else {
         onLogin();
         onNavigate('home');
       }
     } catch (err: any) {
-      console.error('Login network error:', err);
-      const msg = err?.message || '';
-      if (msg.includes('fetch')) {
-        setError('Erro de rede: Falha ao conectar ao Supabase. Verifique sua conexão e as variáveis de ambiente.');
-      } else {
-        setError('Ocorreu um erro inesperado ao fazer login.');
-      }
+      console.error('Login error:', err);
+      setError('Erro ao fazer login. Tente novamente em instantes.');
       setLoading(false);
     }
   };
@@ -1577,17 +1592,6 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
               {error && (
                 <div className="p-4 bg-error-container/10 border border-error/20 rounded-2xl text-error text-sm font-medium flex flex-col gap-2">
                   <p>{error}</p>
-                  {error.includes('Supabase') && (
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        alert('Por favor, verifique se a URL e a Chave Anon estão corretas no menu Settings > Environment Variables.');
-                      }}
-                      className="text-xs underline hover:text-error/80 transition-all font-bold text-left"
-                    >
-                      Como configurar o Supabase?
-                    </button>
-                  )}
                 </div>
               )}
               <div className="space-y-1.5">

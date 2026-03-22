@@ -4,31 +4,30 @@ const rawUrl = import.meta.env.VITE_SUPABASE_URL;
 const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const normalizeUrl = (url: string | undefined): string | null => {
-  if (!url) return null;
+  if (!url || url.trim() === '' || url.includes('placeholder')) return null;
   let target = url.trim();
+  
+  // Remove any trailing slashes or /rest/v1/ paths that users might copy
+  target = target.replace(/\/+$/, '');
+  target = target.replace(/\/rest\/v1\/?$/, '');
+  
   if (!target.startsWith('http://') && !target.startsWith('https://')) {
     target = `https://${target}`;
   }
   try {
     const parsed = new URL(target);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return target;
-    }
+    // Ensure it's just the origin
+    return parsed.origin;
   } catch {
     return null;
   }
-  return null;
 };
 
 const normalizedUrl = normalizeUrl(rawUrl);
-const supabaseUrl = normalizedUrl || 'https://placeholder.supabase.co';
-const supabaseAnonKey = rawKey || 'placeholder';
 
-if (!normalizedUrl) {
-  console.warn('Supabase URL is missing or invalid. Please configure it in Settings > Environment Variables.');
-}
-if (!rawKey) {
-  console.warn('Supabase Anon Key is missing. Please configure it in Settings > Environment Variables.');
-}
+export const supabaseUrl = normalizedUrl || 'https://placeholder.supabase.co';
+export const supabaseAnonKey = rawKey || 'placeholder';
+
+export const isSupabaseConfigured = !!normalizedUrl && !!rawKey && rawKey !== 'placeholder' && !rawKey.includes('placeholder');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
