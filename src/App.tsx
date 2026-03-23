@@ -1949,6 +1949,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [editedData, setEditedData] = useState({
     full_name: '',
     phone: '',
@@ -1974,6 +1975,13 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
     }
   }, [profile, isEditing]);
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
@@ -1995,11 +2003,12 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
 
         if (error) throw error;
         await onRefreshProfile();
+        setMessage({ type: 'success', text: 'Foto de perfil atualizada!' });
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      alert('Erro ao carregar a foto. Tente novamente.');
+      setMessage({ type: 'error', text: 'Erro ao carregar a foto. Tente novamente.' });
     } finally {
       setUploading(false);
     }
@@ -2024,9 +2033,10 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
       if (error) throw error;
       await onRefreshProfile();
       setIsEditing(false);
+      setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Erro ao atualizar o perfil. Tente novamente.');
+      setMessage({ type: 'error', text: 'Erro ao atualizar o perfil. Tente novamente.' });
     } finally {
       setLoading(false);
     }
@@ -2040,6 +2050,23 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-4 space-y-8 pb-32">
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={cn(
+              "fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-sm",
+              message.type === 'success' ? "bg-primary text-on-primary" : "bg-error text-on-error"
+            )}
+          >
+            {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            {message.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <section className="text-center relative">
         <div className="absolute top-0 right-0">
           {!isEditing ? (
