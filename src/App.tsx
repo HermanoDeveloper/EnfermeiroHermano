@@ -28,42 +28,128 @@ import {
   Lock,
   Mail,
   ArrowRight,
+  Sparkles,
+  Info,
+  Layers,
+  Microscope,
+  AlertTriangle,
+  HeartPulse,
   Briefcase,
   Phone,
   MapPin,
   ChevronDown,
   Calendar,
   Hash,
-  Info,
-  AlertTriangle,
-  Microscope,
-  HeartPulse,
-  Layers,
-  Sparkles
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { Screen, Disease, Procedure, Medication } from './types';
 import { DISEASES, PROCEDURES } from './constants';
+import { DETAILED_PROCEDURES, DetailedProcedure } from './data/procedures';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { AIAssistantScreen } from './components/AIAssistantScreen';
+import { FloatingBrain } from './components/FloatingBrain';
+import { searchDiseaseAI, searchProcedureAI } from './services/gemini';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('login');
+  const isDev = import.meta.env.DEV;
+  const [currentScreen, setCurrentScreen] = useState<Screen>(isDev ? 'home' : 'login');
   const [selectedDisease, setSelectedDisease] = useState<Disease | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(isDev);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(isDev ? {
+    full_name: 'Desenvolvedor (Modo Dev)',
+    email: 'dev@exemplo.com',
+    avatar_url: 'https://picsum.photos/seed/dev/200'
+  } : null);
   const [diseases, setDiseases] = useState<Disease[]>(DISEASES);
   const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
-  const [configError, setConfigError] = useState(!isSupabaseConfigured);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDev);
+  const [isInitializing, setIsInitializing] = useState(!isDev);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState<string | null>(null);
+  const [isSearchingAI, setIsSearchingAI] = useState(false);
+  const [isEnhancingProcedure, setIsEnhancingProcedure] = useState(false);
+  const [isSelectingProcedureAI, setIsSelectingProcedureAI] = useState<string | null>(null);
+
+  const handleGlobalSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    // If we are on diseases screen or home, we can trigger AI search for diseases
+    if (currentScreen === 'diseases' || currentScreen === 'home') {
+      setIsSearchingAI(true);
+      try {
+        const result = await searchDiseaseAI(searchQuery);
+        if (result) {
+          setSelectedDisease(result);
+          setCurrentScreen('disease-detail');
+        }
+      } catch (error) {
+        console.error("Global AI Search failed", error);
+      } finally {
+        setIsSearchingAI(false);
+      }
+    } else if (currentScreen === 'procedures') {
+      setIsSearchingAI(true);
+      try {
+        const result = await searchProcedureAI(searchQuery);
+        if (result) {
+          setSelectedProcedure(result);
+          setCurrentScreen('procedure-detail');
+        }
+      } catch (error) {
+        console.error("Global AI Procedure Search failed", error);
+      } finally {
+        setIsSearchingAI(false);
+      }
+    } else {
+      // For other screens, just navigate to diseases with the query
+      setCurrentScreen('diseases');
+    }
+  };
+
+  const handleEnhanceProcedureAI = async (procedure: Procedure) => {
+    setIsEnhancingProcedure(true);
+    try {
+      const result = await searchProcedureAI(procedure.name);
+      if (result) {
+        setSelectedProcedure(result);
+      }
+    } catch (error) {
+      console.error("Enhance Procedure AI failed", error);
+    } finally {
+      setIsEnhancingProcedure(false);
+    }
+  };
+
+  const handleSelectProcedureWithAI = async (procedure: Procedure) => {
+    setIsSelectingProcedureAI(procedure.id);
+    try {
+      const result = await searchProcedureAI(procedure.name);
+      if (result) {
+        setSelectedProcedure(result);
+      } else {
+        // Fallback to local data if AI fails
+        setSelectedProcedure(procedure);
+      }
+      setCurrentScreen('procedure-detail');
+    } catch (error) {
+      console.error("Select Procedure AI failed", error);
+      setSelectedProcedure(procedure);
+      setCurrentScreen('procedure-detail');
+    } finally {
+      setIsSelectingProcedureAI(null);
+    }
+  };
 
   // Auth Listener
   useEffect(() => {
+    if (isDev) return;
+
     if (!isSupabaseConfigured) {
       console.error('Supabase configuration missing or invalid!');
       setConfigError(true);
@@ -118,6 +204,7 @@ export default function App() {
   }, [session]);
 
   async function fetchProfile() {
+    if (!isSupabaseConfigured || !session?.user?.id) return;
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -140,16 +227,31 @@ export default function App() {
   }, [isLoggedIn]);
 
   async function fetchData() {
+    if (!isSupabaseConfigured) return;
     try {
       const { data: diseasesData, error: diseasesError } = await supabase.from('diseases').select('*');
-      if (diseasesData) setDiseases(diseasesData);
-      if (diseasesError) console.error('Error fetching diseases:', diseasesError.message);
+      if (diseasesData) {
+        setDiseases(diseasesData);
+      } else if (diseasesError) {
+        // Only log if it's not a network error, or if we are not in dev mode
+        if (!diseasesError.message.includes('fetch') || !isDev) {
+          console.error('Error fetching diseases:', diseasesError.message);
+        }
+      }
 
       const { data: proceduresData, error: proceduresError } = await supabase.from('procedures').select('*');
-      if (proceduresData) setProcedures(proceduresData);
-      if (proceduresError) console.error('Error fetching procedures:', proceduresError.message);
+      if (proceduresData) {
+        setProcedures(proceduresData);
+      } else if (proceduresError) {
+        if (!proceduresError.message.includes('fetch') || !isDev) {
+          console.error('Error fetching procedures:', proceduresError.message);
+        }
+      }
     } catch (err) {
-      console.error('Network error fetching data:', err);
+      // Network errors are caught here by supabase-js sometimes, or in the error object above
+      if (err instanceof Error && !err.message.includes('fetch')) {
+        console.error('Network error fetching data:', err);
+      }
     }
   }
 
@@ -199,7 +301,7 @@ export default function App() {
       );
     }
 
-    if (configError) {
+    if (configError && !isDev) {
       return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-surface">
           <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-error/10 text-center">
@@ -230,15 +332,41 @@ export default function App() {
       case 'home':
         return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
       case 'diseases':
-        return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} />;
+        return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} searchQuery={searchQuery} onSearch={setSearchQuery} />;
       case 'procedures':
-        return <ProceduresScreen procedures={procedures} onNavigate={setCurrentScreen} />;
+        return (
+          <ProceduresScreen 
+            onNavigate={setCurrentScreen} 
+            onSelectProcedure={handleSelectProcedureWithAI}
+            searchQuery={searchQuery}
+            onSearch={setSearchQuery}
+            onGlobalSearch={handleGlobalSearch}
+            isSearchingAI={isSearchingAI}
+            isSelectingAI={isSelectingProcedureAI}
+          />
+        );
       case 'profile':
         return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
+      case 'procedure-detail':
+        return (
+          <ProcedureDetailScreen 
+            procedure={selectedProcedure} 
+            onBack={() => setCurrentScreen('procedures')} 
+            onEnhanceAI={handleEnhanceProcedureAI}
+            isEnhancing={isEnhancingProcedure}
+          />
+        );
       case 'ai-assistant':
-        return <AIAssistantScreen onBack={() => setCurrentScreen('home')} />;
+        return (
+          <AIAssistantScreen 
+            onBack={() => setCurrentScreen('home')} 
+            onNavigate={setCurrentScreen} 
+            onShowDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }}
+            onShowProcedure={(p) => { setSelectedProcedure(p); setCurrentScreen('procedure-detail'); }}
+          />
+        );
       case 'signup':
         return <SignupScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} />;
       case 'login':
@@ -351,17 +479,34 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bottom Row: Search Input */}
-            <div className="relative group">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-outline group-focus-within:text-primary transition-colors" />
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar protocolos, CID, exames..."
-                className="w-full h-11 pl-10 pr-4 bg-surface-container-low border border-outline-variant/20 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface outline-none transition-all text-sm text-on-surface placeholder:text-outline/60 shadow-inner-sm"
-              />
-            </div>
+            {/* Bottom Row: Search Input (Dynamic) */}
+            {(currentScreen === 'home' || currentScreen === 'diseases') && (
+              <div className="flex items-center gap-2">
+                <div className="relative group flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-outline group-focus-within:text-primary transition-colors" />
+                  <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGlobalSearch()}
+                    placeholder="Pesquisar protocolos, CID, exames..."
+                    className="w-full h-11 pl-10 pr-4 bg-surface-container-low border border-outline-variant/20 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface outline-none transition-all text-sm text-on-surface placeholder:text-outline/60 shadow-inner-sm"
+                  />
+                </div>
+                <button 
+                  onClick={handleGlobalSearch}
+                  disabled={isSearchingAI}
+                  className="h-11 px-6 bg-primary text-on-primary rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSearchingAI ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">Pesquisar</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
       )}
@@ -369,7 +514,9 @@ export default function App() {
       {/* Main Content */}
       <main className={cn(
         "flex-1",
-        currentScreen !== 'login' && currentScreen !== 'signup' ? "pt-[140px] pb-28" : ""
+        currentScreen !== 'login' && currentScreen !== 'signup' ? 
+          ((currentScreen === 'home' || currentScreen === 'diseases' || currentScreen === 'procedures') ? "pt-[140px] pb-28" : "pt-[80px] pb-28") 
+          : ""
       )}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -389,7 +536,7 @@ export default function App() {
       {/* Bottom Navigation */}
       {currentScreen !== 'login' && currentScreen !== 'signup' && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 glass-effect border-t border-outline-variant/10 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-          <div className="max-w-7xl mx-auto px-4 h-20 flex justify-around items-center">
+          <div className="max-w-7xl mx-auto px-2 sm:px-4 h-20 flex justify-between sm:justify-around items-center">
             <NavButton 
               icon={<Home className="w-6 h-6" />} 
               label="Início" 
@@ -402,6 +549,21 @@ export default function App() {
               active={currentScreen === 'diseases' || currentScreen === 'disease-detail'} 
               onClick={() => setCurrentScreen('diseases')} 
             />
+            
+            {/* AI Brain Integrated in Navbar */}
+            <FloatingBrain 
+              onNavigate={setCurrentScreen} 
+              onSearch={(q) => {
+                setSearchQuery(q);
+                setCurrentScreen('diseases');
+              }}
+              onShowDisease={(disease) => {
+                setSelectedDisease(disease);
+                setCurrentScreen('disease-detail');
+              }}
+              currentScreen={currentScreen}
+            />
+
             <NavButton 
               icon={<Stethoscope className="w-6 h-6" />} 
               label="Procedimentos" 
@@ -426,12 +588,12 @@ function NavButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
     <button 
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-2xl transition-all duration-300",
+        "flex flex-col items-center justify-center gap-1 px-2 sm:px-4 py-2 rounded-2xl transition-all duration-300",
         active ? "text-primary bg-primary-fixed/30" : "text-on-surface-variant hover:text-primary"
       )}
     >
       {icon}
-      <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate max-w-[64px] sm:max-w-none">{label}</span>
     </button>
   );
 }
@@ -455,16 +617,8 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any }) {
   return (
-    <div className="px-6 py-4 space-y-10">
-      <section>
-        <h1 className="font-headline text-[2.75rem] font-extrabold leading-tight tracking-tight text-on-surface">
-          Bem-vindo de volta,<br />
-          <span className="text-primary">{profile?.full_name?.split(' ')[0] || 'Profissional'}</span>
-        </h1>
-        <p className="text-on-surface-variant font-medium mt-2">Segunda-feira, 12 de Junho • 4 Revisões Agendadas</p>
-      </section>
-
-      <section className="grid grid-cols-2 gap-4">
+    <div className="max-w-7xl mx-auto px-6 py-4 space-y-10">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="col-span-2 bg-gradient-to-br from-primary-fixed to-secondary-fixed p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
           <div className="relative z-10">
             <Activity className="w-8 h-8 text-on-primary-fixed mb-4" />
@@ -482,15 +636,15 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1">
-            <h3 className="font-headline font-bold text-on-primary-fixed">Assistente de Medicamentos</h3>
-            <p className="text-xs text-on-primary-fixed/70">Consulte o Formulário Nacional de Medicamentos</p>
+            <h3 className="font-headline font-bold text-on-primary-fixed">Cérebro Central</h3>
+            <p className="text-xs text-on-primary-fixed/70">Guia de medicamentos e ações do site</p>
           </div>
           <ChevronRight className="w-5 h-5 text-on-primary-fixed/50" />
         </div>
 
         <div 
           onClick={() => onNavigate('procedures')}
-          className="bg-secondary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all"
+          className="col-span-2 md:col-span-1 bg-secondary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all"
         >
           <div className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center shadow-sm">
             <Stethoscope className="w-6 h-6 text-on-secondary-fixed" />
@@ -498,7 +652,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
           <h3 className="font-headline font-bold text-on-secondary-fixed">Procedimentos de Enfermagem</h3>
         </div>
 
-        <div className="bg-tertiary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all">
+        <div className="col-span-2 md:col-span-1 bg-tertiary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all">
           <div className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center shadow-sm">
             <Bell className="w-6 h-6 text-on-tertiary-fixed" />
           </div>
@@ -511,7 +665,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
           <h2 className="font-headline text-xl font-bold text-on-surface">Visualizados Recentemente</h2>
           <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
         </div>
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {diseases.slice(0, 3).map((disease) => (
             <div 
               key={disease.id}
@@ -532,7 +686,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
         </div>
       </section>
 
-      <section className="p-8 rounded-3xl bg-surface-container-low text-center border border-outline-variant/10">
+      <section className="p-8 rounded-3xl bg-surface-container-low text-center border border-outline-variant/10 max-w-2xl mx-auto">
         <div className="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mx-auto mb-4">
           <ShieldCheck className="w-8 h-8 text-primary" />
         </div>
@@ -545,7 +699,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
   );
 }
 
-function DiseasesScreen({ diseases, onNavigate, onSelectDisease }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void }) {
+function DiseasesScreen({ diseases, onNavigate, onSelectDisease, searchQuery, onSearch }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, searchQuery: string, onSearch: (q: string) => void }) {
   const [filter, setFilter] = useState('Todas');
   const categories = ['Todas', 'Crônicas', 'Infecciosas', 'Neurológicas'];
 
@@ -555,30 +709,22 @@ function DiseasesScreen({ diseases, onNavigate, onSelectDisease }: { diseases: D
     'Neurological': 'Neurológica'
   };
 
-  const filteredDiseases = filter === 'Todas' 
-    ? diseases 
-    : diseases.filter(d => d.type === (filter === 'Crônicas' ? 'Chronic' : filter === 'Infecciosas' ? 'Infectious' : 'Neurological'));
+  const filteredDiseases = diseases.filter(d => {
+    const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         d.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = filter === 'Todas' || d.type === (filter === 'Crônicas' ? 'Chronic' : filter === 'Infecciosas' ? 'Infectious' : 'Neurological');
+    return matchesSearch && matchesFilter;
+  });
 
   return (
-    <div className="px-6 py-4 space-y-8">
-      <section>
-        <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-outline" />
-          <input 
-            type="text" 
-            placeholder="Buscar doenças, sintomas..."
-            className="w-full h-14 pl-12 pr-4 bg-surface-container-high border-none rounded-full focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline ambient-shadow"
-          />
-        </div>
-      </section>
-
-      <section className="-mx-6 px-6 overflow-x-auto no-scrollbar flex gap-3">
+    <div className="max-w-7xl mx-auto px-6 py-4 space-y-8">
+      <section className="-mx-6 px-6 overflow-x-auto no-scrollbar flex gap-3 justify-start md:justify-center">
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => setFilter(cat)}
             className={cn(
-              "px-6 py-2.5 rounded-full text-sm font-semibold transition-all",
+              "px-6 py-2.5 rounded-full text-sm font-semibold transition-all shrink-0",
               filter === cat 
                 ? "bg-primary text-on-primary shadow-md" 
                 : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
@@ -590,106 +736,246 @@ function DiseasesScreen({ diseases, onNavigate, onSelectDisease }: { diseases: D
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-outline mb-4">Condições Comuns</h2>
-        <div className="space-y-4">
-          {filteredDiseases.map((disease) => (
-            <div 
-              key={disease.id}
-              onClick={() => onSelectDisease(disease)}
-              className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-surface-container-low transition-all ambient-shadow relative overflow-hidden"
-            >
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary rounded-r-full" />
-              <div className="flex-1 pr-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={cn(
-                    "text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 rounded",
-                    disease.type === 'Chronic' ? "bg-secondary-container/20 text-secondary" :
-                    disease.type === 'Infectious' ? "bg-tertiary-fixed/30 text-tertiary" :
-                    "bg-surface-container-high text-on-surface-variant"
-                  )}>
-                    {typeLabels[disease.type] || disease.type}
-                  </span>
-                  <h3 className="font-headline font-bold text-on-surface">{disease.name}</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-outline">Condições Comuns</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredDiseases.length > 0 ? (
+            filteredDiseases.map((disease) => (
+              <div 
+                key={disease.id}
+                onClick={() => onSelectDisease(disease)}
+                className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-surface-container-low transition-all ambient-shadow relative overflow-hidden"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary rounded-r-full" />
+                <div className="flex-1 pr-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 rounded",
+                      disease.type === 'Chronic' ? "bg-secondary-container/20 text-secondary" :
+                      disease.type === 'Infectious' ? "bg-tertiary-fixed/30 text-tertiary" :
+                      "bg-surface-container-high text-on-surface-variant"
+                    )}>
+                      {typeLabels[disease.type] || disease.type}
+                    </span>
+                    <h3 className="font-headline font-bold text-on-surface">{disease.name}</h3>
+                  </div>
+                  <p className="text-sm text-on-surface-variant line-clamp-1">{disease.description}</p>
                 </div>
-                <p className="text-sm text-on-surface-variant line-clamp-1">{disease.description}</p>
+                <ChevronRight className="w-5 h-5 text-outline-variant group-hover:text-primary transition-colors" />
               </div>
-              <ChevronRight className="w-5 h-5 text-outline-variant group-hover:text-primary transition-colors" />
+            ))
+          ) : (
+            <div className="col-span-full text-center py-12 space-y-4">
+              <div className="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center mx-auto">
+                <Search className="w-8 h-8 text-outline" />
+              </div>
+              <div>
+                <p className="text-on-surface font-medium">Nenhuma doença encontrada localmente</p>
+                <p className="text-sm text-on-surface-variant">Use o botão de pesquisar na barra superior para buscar na web.</p>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function ProceduresScreen({ procedures, onNavigate }: { procedures: Procedure[], onNavigate: (s: Screen) => void }) {
+function ProceduresScreen({ 
+  onNavigate, 
+  onSelectProcedure,
+  searchQuery,
+  onSearch,
+  onGlobalSearch,
+  isSearchingAI,
+  isSelectingAI
+}: { 
+  onNavigate: (s: Screen) => void, 
+  onSelectProcedure: (p: Procedure) => void,
+  searchQuery: string,
+  onSearch: (q: string) => void,
+  onGlobalSearch: () => void,
+  isSearchingAI: boolean,
+  isSelectingAI: string | null
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const filteredProcedures = DETAILED_PROCEDURES.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="px-6 py-4 space-y-8">
-      <section>
+    <div className="max-w-7xl mx-auto px-6 py-4 space-y-8">
+      <section className="max-w-2xl mx-auto text-center md:text-left">
         <h1 className="text-3xl font-extrabold tracking-tight text-on-surface mb-2">Procedimentos</h1>
         <p className="text-on-surface-variant text-sm leading-relaxed">Técnicas de enfermagem baseadas em evidências e protocolos clínicos.</p>
       </section>
 
-      <section>
-        <div className="relative flex items-center">
-          <Search className="absolute left-4 text-outline w-5 h-5" />
-          <input 
-            type="text" 
-            placeholder="Buscar procedimentos médicos..."
-            className="w-full h-14 pl-12 pr-4 bg-surface-container-high border-none rounded-full focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline ambient-shadow"
-          />
-        </div>
-      </section>
-
-      <section className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-on-surface">Categorias</h2>
-          <span className="text-xs font-semibold uppercase tracking-widest text-primary cursor-pointer">Ver Tudo</span>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {procedures.map((proc) => (
-            <div 
-              key={proc.id}
-              className="bg-surface-container-low rounded-3xl p-5 border-l-4 border-secondary flex flex-col justify-between aspect-square group active:scale-95 transition-all cursor-pointer"
-            >
-              <div className="w-10 h-10 bg-secondary-container rounded-xl flex items-center justify-center text-on-secondary-container shadow-sm">
-                {proc.icon === 'ShieldCheck' ? <ShieldCheck className="w-6 h-6" /> : 
-                 proc.icon === 'Syringe' ? <Syringe className="w-6 h-6" /> :
-                 proc.icon === 'Activity' ? <Activity className="w-6 h-6" /> :
-                 <Stethoscope className="w-6 h-6" />}
-              </div>
-              <div>
-                <h3 className="font-bold text-on-surface leading-tight">{proc.name}</h3>
-                <p className="text-[11px] text-on-surface-variant mt-1">{proc.guideCount} Guias</p>
-              </div>
-            </div>
-          ))}
+      <section className="max-w-2xl mx-auto w-full">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-5 h-5 group-focus-within:text-primary transition-colors" />
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => onSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onGlobalSearch()}
+              placeholder="Buscar procedimentos médicos..."
+              className="w-full h-14 pl-12 pr-4 bg-surface-container-high border-none rounded-full focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline ambient-shadow"
+            />
+          </div>
+          <button 
+            onClick={onGlobalSearch}
+            disabled={isSearchingAI}
+            className="h-14 px-6 bg-primary text-on-primary rounded-full font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isSearchingAI ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Search className="w-5 h-5" />
+            )}
+            <span className="hidden sm:inline">Pesquisar</span>
+          </button>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-bold text-on-surface">Procedimentos Comuns</h2>
-        <div className="space-y-3">
-          <div className="bg-surface-container-lowest rounded-2xl p-4 flex items-center gap-4 ambient-shadow border-l-4 border-secondary active:scale-[0.98] transition-all cursor-pointer">
-            <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center flex-shrink-0">
-              <Activity className="w-6 h-6 text-secondary" />
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-bold text-on-surface">Todos os Procedimentos</h2>
+          <span className="text-xs font-semibold uppercase tracking-widest text-primary">Manual 2017</span>
+        </div>
+        
+        <div className="flex flex-col gap-3">
+          {filteredProcedures.length > 0 ? (
+            filteredProcedures.map((proc) => (
+              <div 
+                key={proc.id}
+                className="bg-surface-container-lowest rounded-2xl overflow-hidden ambient-shadow border-l-4 border-secondary transition-all"
+              >
+                <div 
+                  onClick={() => setExpandedId(expandedId === proc.id ? null : proc.id)}
+                  className="p-4 flex items-center gap-4 cursor-pointer hover:bg-surface-container-low group transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-secondary-container/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary-container/40 transition-colors">
+                    {proc.icon === 'ShieldCheck' ? <ShieldCheck className="w-6 h-6 text-secondary" /> : 
+                     proc.icon === 'Syringe' ? <Syringe className="w-6 h-6 text-secondary" /> :
+                     proc.icon === 'Activity' ? <Activity className="w-6 h-6 text-secondary" /> :
+                     proc.icon === 'Thermometer' ? <Thermometer className="w-6 h-6 text-secondary" /> :
+                     proc.icon === 'Microscope' ? <Microscope className="w-6 h-6 text-secondary" /> :
+                     <Stethoscope className="w-6 h-6 text-secondary" />}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-sm text-on-surface group-hover:text-primary transition-colors">{proc.name}</h4>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-[10px] font-bold text-outline uppercase tracking-widest">{proc.category}</p>
+                      <span className="w-1 h-1 bg-outline-variant rounded-full" />
+                      <p className="text-[10px] text-on-surface-variant">{proc.steps} Passos • {proc.duration}</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={cn(
+                    "w-5 h-5 text-outline transition-transform duration-300",
+                    expandedId === proc.id && "rotate-180 text-primary"
+                  )} />
+                </div>
+
+                <AnimatePresence>
+                  {expandedId === proc.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-4 pb-6 pt-2 border-t border-outline-variant/10 space-y-6">
+                        <div className="space-y-2">
+                          <h5 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                            <Info className="w-3 h-3" /> Conceito
+                          </h5>
+                          <p className="text-sm text-on-surface-variant leading-relaxed">{proc.concept}</p>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h5 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                            <Layers className="w-3 h-3" /> Materiais Necessários
+                          </h5>
+                          <div className="flex flex-wrap gap-2">
+                            {proc.materials.map((item, idx) => (
+                              <span key={idx} className="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-medium text-on-surface-variant">
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h5 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                            <Activity className="w-3 h-3" /> Passo a Passo
+                          </h5>
+                          <div className="space-y-3">
+                            {proc.procedureSteps.map((step, idx) => (
+                              <div key={idx} className="flex gap-3">
+                                <span className="w-5 h-5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <p className="text-sm text-on-surface leading-snug">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {proc.observations && proc.observations.length > 0 && (
+                          <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm">
+                            <h5 className="text-xs font-bold uppercase tracking-widest text-amber-700 flex items-center gap-2 mb-2">
+                              <AlertCircle className="w-3 h-3" /> Observações Críticas
+                            </h5>
+                            <ul className="space-y-2">
+                              {proc.observations.map((obs, idx) => (
+                                <li key={idx} className="text-xs text-amber-900 font-medium leading-relaxed flex gap-2">
+                                  <span className="text-amber-500">•</span>
+                                  {obs}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        <button 
+                          onClick={() => onSelectProcedure(proc)}
+                          disabled={isSelectingAI !== null}
+                          className="w-full py-3 bg-surface-container-high text-primary rounded-xl text-xs font-bold hover:bg-primary hover:text-on-primary transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isSelectingAI === proc.id ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              Buscando informações na web...
+                            </>
+                          ) : (
+                            <>
+                              Ver Guia Completo <ArrowRight className="w-3 h-3" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12 space-y-4">
+              <div className="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center mx-auto">
+                <Search className="w-8 h-8 text-outline" />
+              </div>
+              <div>
+                <p className="text-on-surface font-medium">Nenhum procedimento encontrado localmente</p>
+                <p className="text-sm text-on-surface-variant">Use o botão "Pesquisar" para buscar no manual oficial.</p>
+              </div>
             </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-sm text-on-surface">Medição Manual de PA</h4>
-              <p className="text-xs text-on-surface-variant">Sinais Vitais • 6 Passos • 5 min</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-outline" />
-          </div>
-          <div className="bg-surface-container-lowest rounded-2xl p-4 flex items-center gap-4 ambient-shadow border-l-4 border-tertiary active:scale-[0.98] transition-all cursor-pointer">
-            <div className="w-12 h-12 rounded-full bg-tertiary-fixed/30 flex items-center justify-center flex-shrink-0">
-              <Syringe className="w-6 h-6 text-tertiary" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-sm text-on-surface">Técnica de Injeção IM</h4>
-              <p className="text-xs text-on-surface-variant">Medicação • 12 Passos • 10 min</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-outline" />
-          </div>
+          )}
         </div>
       </section>
     </div>
@@ -707,6 +993,14 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
 
   const sections = [
     { label: 'Descrição', content: disease.description, icon: <Info className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { 
+      label: 'Contexto Local (Moçambique)', 
+      content: disease.localHistory || null, 
+      icon: <MapPin className="w-5 h-5" />, 
+      color: 'text-orange-600', 
+      bg: 'bg-orange-50',
+      show: !!disease.localHistory 
+    },
     { 
       label: 'Tipos / Subtipos', 
       content: disease.subtypes || null, 
@@ -726,7 +1020,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       color: 'text-pink-500', 
       bg: 'bg-pink-50',
       isMedication: true,
-      show: !!disease.medications 
+      show: true 
     },
     { label: 'Complicações', content: disease.complications, icon: <AlertTriangle className="w-5 h-5" />, color: 'text-orange-500', bg: 'bg-orange-50' },
     { label: 'Cuidados de enfermagem', content: disease.nursingCare, icon: <HeartPulse className="w-5 h-5" />, color: 'text-indigo-500', bg: 'bg-indigo-50' },
@@ -734,12 +1028,12 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
   ].filter(s => s.show !== false);
 
   return (
-    <div className="px-6 py-4 space-y-8 pb-32">
+    <div className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32">
       {/* Header Image with Floating Badge */}
-      <section className="relative">
-        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] ambient-shadow group">
+      <section className="relative max-w-4xl mx-auto w-full">
+        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group">
           <img 
-            src={`https://picsum.photos/seed/${disease.name}/800/500`} 
+            src={`https://picsum.photos/seed/${disease.name}/1200/600`} 
             alt={disease.name} 
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             referrerPolicy="no-referrer"
@@ -762,7 +1056,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
             <motion.h2 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="font-headline text-4xl font-black text-white tracking-tighter leading-none mb-2"
+              className="font-headline text-4xl md:text-6xl font-black text-white tracking-tighter leading-none mb-2"
             >
               {disease.name}
             </motion.h2>
@@ -775,14 +1069,17 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       </section>
 
       {/* Bento Grid Sections */}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {sections.map((section, idx) => (
           <motion.section 
             key={idx}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.05 }}
-            className="group bg-surface-container-lowest p-6 rounded-[2rem] ambient-shadow border border-outline-variant/5 hover:border-primary/20 transition-all duration-300"
+            className={cn(
+              "group bg-surface-container-lowest p-6 rounded-[2rem] ambient-shadow border border-outline-variant/5 hover:border-primary/20 transition-all duration-300",
+              section.isMedication ? "md:col-span-2 lg:col-span-3" : ""
+            )}
           >
             <div className="flex items-start gap-4">
               <div className={cn(
@@ -797,31 +1094,43 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                   {section.label}
                 </h3>
                 {section.isMedication ? (
-                  <div className="space-y-3 w-full mt-2">
-                    {(section.content as Medication[]).map((med, i) => (
-                      <div key={i} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20 space-y-3 hover:bg-surface-container transition-colors duration-200">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-6 rounded-full bg-pink-500" />
-                          <h4 className="font-bold text-on-surface text-base tracking-tight">{med.name}</h4>
-                        </div>
-                        <div className="grid grid-cols-1 gap-4">
-                          <div className="flex gap-3">
-                            <div className="w-px bg-outline-variant/30" />
-                            <div className="space-y-1">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-outline/80">Posologia</span>
-                              <p className="text-sm text-on-surface-variant font-medium leading-snug">{med.posology}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    {(section.content as Medication[] || []).length > 0 ? (
+                      (section.content as Medication[]).map((med, i) => (
+                        <div key={i} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20 space-y-3 hover:bg-surface-container transition-colors duration-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-6 rounded-full bg-pink-500" />
+                            <h4 className="font-bold text-on-surface text-base tracking-tight">{med.name}</h4>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4">
+                            <div className="flex gap-3">
+                              <div className="w-px bg-outline-variant/30" />
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-outline/80">Posologia</span>
+                                <p className="text-sm text-on-surface-variant font-medium leading-snug">{med.posology}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-3">
+                              <div className="w-px bg-rose-500/20" />
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-rose-500/70">Contraindicação</span>
+                                <p className="text-sm text-on-surface-variant font-medium italic leading-snug">{med.contraindications}</p>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex gap-3">
-                            <div className="w-px bg-rose-500/20" />
-                            <div className="space-y-1">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-rose-500/70">Contraindicação</span>
-                              <p className="text-sm text-on-surface-variant font-medium italic leading-snug">{med.contraindications}</p>
-                            </div>
-                          </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full p-8 bg-surface-container-low rounded-[2rem] border border-dashed border-outline-variant/30 text-center space-y-2">
+                        <div className="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center mx-auto">
+                          <Pill className="w-6 h-6 text-outline" />
+                        </div>
+                        <p className="text-on-surface font-bold text-sm">Nenhum medicamento encontrado no FNM</p>
+                        <p className="text-xs text-on-surface-variant max-w-[240px] mx-auto">
+                          Para esta condição, não foram encontrados medicamentos correspondentes no Formulário Nacional de Medicamentos de Moçambique.
+                        </p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 ) : Array.isArray(section.content) ? (
                   <ul className="list-disc pl-4 space-y-1.5">
@@ -863,7 +1172,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       <motion.section 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-primary p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden"
+        className="bg-primary p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden max-w-2xl mx-auto"
       >
         <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
           <ShieldCheck className="w-64 h-64" />
@@ -882,6 +1191,154 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
           </button>
         </div>
       </motion.section>
+    </div>
+  );
+}
+
+function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: { 
+  procedure: Procedure | null, 
+  onBack: () => void,
+  onEnhanceAI: (p: Procedure) => void,
+  isEnhancing: boolean
+}) {
+  if (!procedure) return null;
+
+  const sections = [
+    { title: 'Conceito', content: procedure.concept, icon: Info, show: !!procedure.concept, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { title: 'Materiais Necessários', content: procedure.materials, icon: ShieldCheck, show: !!procedure.materials?.length, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { title: 'Etapas do Procedimento', content: procedure.procedureSteps, icon: Activity, show: !!procedure.procedureSteps?.length, isSteps: true, color: 'text-primary', bg: 'bg-primary/5' },
+    { title: 'Observações Importantes', content: procedure.observations, icon: AlertCircle, show: !!procedure.observations?.length, isObservations: true, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+  ];
+
+  return (
+    <div className="flex-1 p-6 space-y-10 pb-32 max-w-4xl mx-auto w-full">
+      {/* Header */}
+      <header className="flex items-center gap-6">
+        <button 
+          onClick={onBack}
+          className="w-14 h-14 rounded-full bg-white shadow-lg flex items-center justify-center text-on-surface active:scale-90 transition-all hover:bg-surface-container-low"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-3 py-1 bg-secondary/10 text-secondary text-[10px] font-black uppercase tracking-widest rounded-full">
+              {procedure.category}
+            </span>
+            <span className="text-[10px] font-bold text-outline uppercase tracking-widest flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> Manual 2017
+            </span>
+          </div>
+          <h1 className="font-headline text-4xl font-black text-on-surface tracking-tight leading-none">{procedure.name}</h1>
+        </div>
+      </header>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
+            <Activity className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-outline uppercase tracking-widest">Complexidade</p>
+            <p className="text-sm font-black text-on-surface">{procedure.steps} Passos</p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
+          <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary">
+            <Clock className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-outline uppercase tracking-widest">Tempo Médio</p>
+            <p className="text-sm font-black text-on-surface">{procedure.duration}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Content Sections */}
+      <div className="space-y-8">
+        {sections.filter(s => s.show).map((section, index) => (
+          <motion.section 
+            key={section.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className={cn(
+              "bg-white rounded-[3rem] p-8 shadow-sm border border-outline-variant/5 relative overflow-hidden",
+              section.isObservations && "bg-amber-50/50 border-amber-200"
+            )}
+          >
+            <div className="flex gap-6">
+              <div className={cn(
+                "w-14 h-14 rounded-3xl flex items-center justify-center flex-shrink-0 shadow-inner",
+                section.bg,
+                section.color
+              )}>
+                <section.icon className="w-7 h-7" />
+              </div>
+              <div className="flex-1 pt-2">
+                <h2 className={cn(
+                  "font-headline text-xl font-black mb-6 tracking-tight flex items-center gap-2",
+                  section.color || "text-on-surface"
+                )}>
+                  {section.title}
+                </h2>
+                
+                {section.isSteps && Array.isArray(section.content) ? (
+                  <div className="space-y-6 relative">
+                    <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-primary/10" />
+                    {section.content.map((step, i) => (
+                      <div key={i} className="flex gap-6 relative">
+                        <div className="w-8 h-8 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 z-10">
+                          {i + 1}
+                        </div>
+                        <p className="text-on-surface-variant leading-relaxed text-sm font-medium pt-1">
+                          {step}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : section.isObservations && Array.isArray(section.content) ? (
+                  <ul className="space-y-3">
+                    {section.content.map((obs, i) => (
+                      <li key={i} className="flex gap-3 p-4 bg-white rounded-2xl border border-amber-100 shadow-sm">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                        <p className="text-amber-900 text-sm font-semibold leading-relaxed">
+                          {obs}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : Array.isArray(section.content) ? (
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {section.content.map((item, i) => (
+                      <li key={i} className="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-2xl border border-outline-variant/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                        <span className="text-on-surface-variant text-sm font-medium">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-on-surface-variant leading-relaxed text-sm font-medium">
+                    {section.content as string}
+                  </p>
+                )}
+              </div>
+            </div>
+          </motion.section>
+        ))}
+      </div>
+
+      {/* Footer Disclaimer */}
+      <div className="p-8 bg-surface-container-low rounded-[3rem] border border-outline-variant/20 text-center space-y-3">
+        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <p className="text-on-surface font-bold text-sm">Fonte: Manual de Procedimentos (2017) + Pesquisa IA em Tempo Real</p>
+        <p className="text-xs text-on-surface-variant max-w-[320px] mx-auto leading-relaxed">
+          Este guia foi enriquecido com informações da internet via Inteligência Artificial. Siga sempre os protocolos específicos da sua unidade de saúde.
+        </p>
+      </div>
     </div>
   );
 }
@@ -1462,24 +1919,27 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
 
 function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => void }) {
   return (
-    <div className="px-6 py-4 space-y-8">
+    <div className="max-w-4xl mx-auto px-6 py-4 space-y-8">
       <section className="text-center">
-        <div className="w-24 h-24 rounded-full bg-primary-fixed mx-auto mb-4 overflow-hidden border-4 border-white shadow-md">
+        <div className="w-32 h-32 rounded-full bg-primary-fixed mx-auto mb-6 overflow-hidden border-4 border-white shadow-xl">
            <img 
-            src={`https://picsum.photos/seed/${profile?.id || 'doc'}/200`} 
+            src={`https://picsum.photos/seed/${profile?.id || 'doc'}/400`} 
             alt={profile?.full_name || "Perfil"} 
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
         </div>
-        <h2 className="font-headline text-2xl font-bold text-on-surface">{profile?.full_name || 'Carregando...'}</h2>
-        <p className="text-on-surface-variant font-medium">{CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} {profile?.other_category ? `(${profile.other_category})` : ''}</p>
+        <h2 className="font-headline text-3xl font-black text-on-surface tracking-tight">{profile?.full_name || 'Carregando...'}</h2>
+        <p className="text-primary font-bold uppercase tracking-[0.2em] text-xs mt-2">
+          {CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} 
+          {profile?.other_category ? ` (${profile.other_category})` : ''}
+        </p>
       </section>
 
-      <section className="space-y-4">
-        <div className="bg-surface-container-low p-4 rounded-2xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all">
-          <div className="w-10 h-10 rounded-xl bg-primary-fixed/30 flex items-center justify-center">
-            <User className="w-5 h-5 text-primary" />
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
+          <div className="w-12 h-12 rounded-2xl bg-primary-fixed/30 flex items-center justify-center">
+            <User className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1">
             <h4 className="font-bold text-on-surface">Dados Pessoais</h4>
@@ -1487,9 +1947,9 @@ function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => vo
           </div>
           <ChevronRight className="w-5 h-5 text-outline-variant" />
         </div>
-        <div className="bg-surface-container-low p-4 rounded-2xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all">
-          <div className="w-10 h-10 rounded-xl bg-secondary-fixed/30 flex items-center justify-center">
-            <Bell className="w-5 h-5 text-secondary" />
+        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
+          <div className="w-12 h-12 rounded-2xl bg-secondary-fixed/30 flex items-center justify-center">
+            <Bell className="w-6 h-6 text-secondary" />
           </div>
           <div className="flex-1">
             <h4 className="font-bold text-on-surface">Notificações</h4>
@@ -1497,9 +1957,9 @@ function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => vo
           </div>
           <ChevronRight className="w-5 h-5 text-outline-variant" />
         </div>
-        <div className="bg-surface-container-low p-4 rounded-2xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all">
-          <div className="w-10 h-10 rounded-xl bg-tertiary-fixed/30 flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-tertiary" />
+        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
+          <div className="w-12 h-12 rounded-2xl bg-tertiary-fixed/30 flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6 text-tertiary" />
           </div>
           <div className="flex-1">
             <h4 className="font-bold text-on-surface">Segurança</h4>
@@ -1507,12 +1967,22 @@ function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => vo
           </div>
           <ChevronRight className="w-5 h-5 text-outline-variant" />
         </div>
+        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
+          <div className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center">
+            <Briefcase className="w-6 h-6 text-on-surface-variant" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-on-surface">Histórico</h4>
+            <p className="text-xs text-on-surface-variant">Protocolos visualizados recentemente</p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-outline-variant" />
+        </div>
       </section>
 
-      <section className="pt-4">
+      <section className="pt-8 max-w-md mx-auto">
         <button 
           onClick={onLogout}
-          className="w-full py-4 bg-error-container/20 text-error font-headline font-bold rounded-2xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          className="w-full py-5 bg-error-container/20 text-error font-headline font-black rounded-2xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3 uppercase text-xs tracking-[0.2em]"
         >
           <LogIn className="w-5 h-5 rotate-180" />
           Sair da Conta

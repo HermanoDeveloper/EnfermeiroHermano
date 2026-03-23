@@ -4,7 +4,7 @@ const rawUrl = import.meta.env.VITE_SUPABASE_URL;
 const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const normalizeUrl = (url: string | undefined): string | null => {
-  if (!url || url.trim() === '' || url.includes('placeholder')) return null;
+  if (!url || url.trim() === '' || url.includes('placeholder') || url.includes('your-project')) return null;
   let target = url.trim();
   
   // Remove any trailing slashes or /rest/v1/ paths that users might copy

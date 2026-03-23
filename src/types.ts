@@ -1,4 +1,4 @@
-export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'login' | 'signup' | 'ai-assistant';
+export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'procedure-detail' | 'login' | 'signup' | 'ai-assistant';
 
 export interface Medication {
   name: string;
@@ -22,6 +22,7 @@ export interface Disease {
   updatedAt: string;
   type: 'Chronic' | 'Infectious' | 'Neurological';
   subtypes?: string[];
+  localHistory?: string;
 }
 
 export interface Procedure {
@@ -32,4 +33,8 @@ export interface Procedure {
   duration: string;
   guideCount: number;
   icon: string;
+  concept?: string;
+  materials?: string[];
+  procedureSteps?: string[];
+  observations?: string[];
 }

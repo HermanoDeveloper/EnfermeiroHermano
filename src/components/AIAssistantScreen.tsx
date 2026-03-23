@@ -1,25 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info } from 'lucide-react';
-import { askAboutMedication } from '../services/gemini';
+import { askAI } from '../services/gemini';
 import { cn } from '../lib/utils';
+import { Screen } from '../types';
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'ai';
   timestamp: Date;
+  command?: any;
 }
 
 interface AIAssistantScreenProps {
   onBack: () => void;
+  onNavigate?: (screen: Screen) => void;
+  onShowDisease?: (disease: any) => void;
+  onShowProcedure?: (procedure: any) => void;
 }
 
-export function AIAssistantScreen({ onBack }: AIAssistantScreenProps) {
+export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowProcedure }: AIAssistantScreenProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Olá! Sou seu Assistente IA especializado no Formulário Nacional de Medicamentos. Como posso ajudar você hoje?',
+      text: 'Olá! Sou o Cérebro Central da Biblioteca da Saúde. Estou aqui para guiar suas ações e fornecer informações precisas do Formulário Nacional de Medicamentos. Como posso comandar sua navegação hoje?',
       sender: 'ai',
       timestamp: new Date(),
     },
@@ -51,18 +56,31 @@ export function AIAssistantScreen({ onBack }: AIAssistantScreenProps) {
     setIsLoading(true);
 
     try {
-      const response = await askAboutMedication(input);
+      const response = await askAI(input, { currentScreen: 'ai-assistant' });
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: response,
+        text: response.text,
         sender: 'ai',
         timestamp: new Date(),
+        command: response.command
       };
       setMessages((prev) => [...prev, aiMessage]);
+
+      if (response.command) {
+        if (response.command.action === 'navigate' && onNavigate) {
+          setTimeout(() => {
+            onNavigate(response.command.target as Screen);
+          }, 2000);
+        } else if (response.command.action === 'show_disease' && onShowDisease) {
+          onShowDisease(response.command.params);
+        } else if (response.command.action === 'show_procedure' && onShowProcedure) {
+          onShowProcedure(response.command.params);
+        }
+      }
     } catch (error) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Desculpe, ocorreu um erro ao processar sua pergunta.',
+        text: 'Desculpe, o cérebro do sistema encontrou um erro ao processar sua solicitação.',
         sender: 'ai',
         timestamp: new Date(),
       };
