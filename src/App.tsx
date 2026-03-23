@@ -6,6 +6,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Camera,
+  Upload,
+  Edit2,
+  Save,
+  X,
   Search, 
   Bell, 
   Home, 
@@ -212,7 +217,12 @@ export default function App() {
         .eq('id', session.user.id)
         .single();
       
-      if (data) setProfile(data);
+      if (data) {
+        setProfile({
+          ...data,
+          email: session.user.email
+        });
+      }
       if (error) console.error('Error fetching profile:', error.message);
     } catch (err) {
       console.error('Network error fetching profile:', err);
@@ -346,7 +356,7 @@ export default function App() {
           />
         );
       case 'profile':
-        return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} />;
+        return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} onRefreshProfile={fetchProfile} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
       case 'procedure-detail':
@@ -1464,6 +1474,7 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
+            full_name: fullName,
             birth_date: birthDate,
             category,
             other_category: otherCategory,
@@ -1933,36 +1944,312 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
   );
 }
 
-function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => void }) {
+function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, onLogout: () => void, onRefreshProfile: () => Promise<void> }) {
+  const [uploading, setUploading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [editedData, setEditedData] = useState({
+    full_name: '',
+    phone: '',
+    address: '',
+    birth_date: '',
+    category: '',
+    other_category: ''
+  });
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const categoryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setEditedData({
+        full_name: profile.full_name || '',
+        phone: profile.phone || '',
+        address: profile.address || '',
+        birth_date: profile.birth_date || '',
+        category: profile.category || '',
+        other_category: profile.other_category || ''
+      });
+    }
+  }, [profile, isEditing]);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !profile?.id) return;
+
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        
+        const { error } = await supabase
+          .from('profiles')
+          .update({ avatar_url: base64String })
+          .eq('id', profile.id);
+
+        if (error) throw error;
+        await onRefreshProfile();
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      alert('Erro ao carregar a foto. Tente novamente.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editedData.full_name,
+          phone: editedData.phone,
+          address: editedData.address,
+          birth_date: editedData.birth_date,
+          category: editedData.category,
+          other_category: editedData.other_category
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+      await onRefreshProfile();
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Erro ao atualizar o perfil. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Não informada';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
+
   return (
-    <div className="max-w-4xl mx-auto px-6 py-4 space-y-8">
-      <section className="text-center">
-        <div className="w-32 h-32 rounded-full bg-primary-fixed mx-auto mb-6 overflow-hidden border-4 border-white shadow-xl">
-           <img 
-            src={`https://picsum.photos/seed/${profile?.id || 'doc'}/400`} 
-            alt={profile?.full_name || "Perfil"} 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
+    <div className="max-w-4xl mx-auto px-6 py-4 space-y-8 pb-32">
+      <section className="text-center relative">
+        <div className="absolute top-0 right-0">
+          {!isEditing ? (
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="p-3 bg-surface-container-high text-primary rounded-2xl hover:bg-primary hover:text-on-primary transition-all shadow-sm"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setIsEditing(false)}
+                className="p-3 bg-surface-container-high text-on-surface-variant rounded-2xl hover:bg-surface-container-highest transition-all shadow-sm"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={loading}
+                className="p-3 bg-primary text-on-primary rounded-2xl hover:bg-primary/90 transition-all shadow-md disabled:opacity-50"
+              >
+                {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="relative w-32 h-32 mx-auto mb-6 group">
+          <div className="w-full h-full rounded-full bg-primary-fixed overflow-hidden border-4 border-white shadow-xl relative">
+            <img 
+              src={profile?.avatar_url || `https://picsum.photos/seed/${profile?.id || 'doc'}/400`} 
+              alt={profile?.full_name || "Perfil"} 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+            {uploading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={handleAvatarClick}
+            disabled={uploading}
+            className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:scale-110 active:scale-95 transition-all z-10"
+          >
+            <Camera className="w-5 h-5" />
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept="image/*" 
+            className="hidden" 
           />
         </div>
-        <h2 className="font-headline text-3xl font-black text-on-surface tracking-tight">{profile?.full_name || 'Carregando...'}</h2>
-        <p className="text-primary font-bold uppercase tracking-[0.2em] text-xs mt-2">
-          {CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} 
-          {profile?.other_category ? ` (${profile.other_category})` : ''}
-        </p>
+        
+        {isEditing ? (
+          <div className="max-w-xs mx-auto space-y-2">
+            <input 
+              type="text"
+              value={editedData.full_name}
+              onChange={(e) => setEditedData({ ...editedData, full_name: e.target.value })}
+              placeholder="Nome Completo"
+              className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-center font-headline text-xl font-bold text-on-surface"
+            />
+          </div>
+        ) : (
+          <>
+            <h2 className="font-headline text-3xl font-black text-on-surface tracking-tight">{profile?.full_name || 'Carregando...'}</h2>
+            <p className="text-primary font-bold uppercase tracking-[0.2em] text-xs mt-2">
+              {CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} 
+              {profile?.other_category ? ` (${profile.other_category})` : ''}
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="font-headline text-lg font-bold text-on-surface px-2">Informações da Conta</h3>
+        <div className="bg-surface-container-lowest rounded-[2rem] p-6 ambient-shadow border border-outline-variant/10 space-y-6">
+          <ProfileField icon={<Mail className="w-5 h-5" />} label="E-mail" value={profile?.email || 'Não informado'} />
+          
+          {isEditing ? (
+            <>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                  <Phone className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Telefone</p>
+                  <input 
+                    type="text"
+                    value={editedData.phone}
+                    onChange={(e) => setEditedData({ ...editedData, phone: e.target.value })}
+                    className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                  <MapPin className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Endereço</p>
+                  <input 
+                    type="text"
+                    value={editedData.address}
+                    onChange={(e) => setEditedData({ ...editedData, address: e.target.value })}
+                    className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                  <Calendar className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Data de Nascimento</p>
+                  <input 
+                    type="date"
+                    value={editedData.birth_date}
+                    onChange={(e) => setEditedData({ ...editedData, birth_date: e.target.value })}
+                    className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4" ref={categoryRef}>
+                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                  <Briefcase className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Categoria</p>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                      className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-left text-sm text-on-surface flex items-center justify-between"
+                    >
+                      <span>
+                        {editedData.category ? CATEGORIES.find(c => c.id === editedData.category)?.label : "Selecione sua categoria"}
+                      </span>
+                      <ChevronDown className={cn("w-4 h-4 transition-transform", isCategoryDropdownOpen && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCategoryDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                          className="absolute z-50 left-0 right-0 mt-2 bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto"
+                        >
+                          {CATEGORIES.map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => {
+                                setEditedData({ ...editedData, category: cat.id });
+                                setIsCategoryDropdownOpen(false);
+                              }}
+                              className={cn(
+                                "w-full px-4 py-3 text-left text-sm transition-colors hover:bg-surface-container-high",
+                                editedData.category === cat.id ? "bg-primary/10 text-primary font-semibold" : "text-on-surface"
+                              )}
+                            >
+                              {cat.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+
+              {editedData.category === 'other' && (
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                    <Briefcase className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Especifique sua Profissão</p>
+                    <input 
+                      type="text"
+                      value={editedData.other_category}
+                      onChange={(e) => setEditedData({ ...editedData, other_category: e.target.value })}
+                      placeholder="Ex: Nutricionista"
+                      className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <ProfileField icon={<Phone className="w-5 h-5" />} label="Telefone" value={profile?.phone || 'Não informado'} />
+              <ProfileField icon={<MapPin className="w-5 h-5" />} label="Endereço" value={profile?.address || 'Não informado'} />
+              <ProfileField icon={<Calendar className="w-5 h-5" />} label="Data de Nascimento" value={formatDate(profile?.birth_date)} />
+              <ProfileField icon={<Briefcase className="w-5 h-5" />} label="Categoria" value={CATEGORIES.find(c => c.id === profile?.category)?.label || 'Não informada'} />
+            </>
+          )}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
-          <div className="w-12 h-12 rounded-2xl bg-primary-fixed/30 flex items-center justify-center">
-            <User className="w-6 h-6 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-bold text-on-surface">Dados Pessoais</h4>
-            <p className="text-xs text-on-surface-variant">Nome, CRM, Especialidade</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-outline-variant" />
-        </div>
         <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
           <div className="w-12 h-12 rounded-2xl bg-secondary-fixed/30 flex items-center justify-center">
             <Bell className="w-6 h-6 text-secondary" />
@@ -1983,16 +2270,6 @@ function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => vo
           </div>
           <ChevronRight className="w-5 h-5 text-outline-variant" />
         </div>
-        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
-          <div className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center">
-            <Briefcase className="w-6 h-6 text-on-surface-variant" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-bold text-on-surface">Histórico</h4>
-            <p className="text-xs text-on-surface-variant">Protocolos visualizados recentemente</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-outline-variant" />
-        </div>
       </section>
 
       <section className="pt-8 max-w-md mx-auto">
@@ -2004,6 +2281,19 @@ function ProfileScreen({ profile, onLogout }: { profile: any, onLogout: () => vo
           Sair da Conta
         </button>
       </section>
+    </div>
+  );
+}
+function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
+  return (
+    <div className="flex items-start gap-4">
+      <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+        {React.cloneElement(icon as React.ReactElement, { className: cn((icon as React.ReactElement).props.className, "text-primary") })}
+      </div>
+      <div className="flex-1 border-b border-outline-variant/10 pb-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">{label}</p>
+        <p className="text-on-surface font-medium">{value}</p>
+      </div>
     </div>
   );
 }
