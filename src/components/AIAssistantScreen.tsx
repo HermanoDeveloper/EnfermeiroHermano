@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { askAI } from '../services/gemini';
 import { cn } from '../lib/utils';
 import { Screen } from '../types';
@@ -21,14 +22,25 @@ interface AIAssistantScreenProps {
 }
 
 export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowProcedure }: AIAssistantScreenProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Olá! Sou o Cérebro Central da Biblioteca da Saúde. Estou aqui para guiar suas ações e fornecer informações precisas do Formulário Nacional de Medicamentos. Como posso comandar sua navegação hoje?',
-      sender: 'ai',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('hermano_chat_history');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+      } catch (e) {
+        console.error("Error parsing chat history", e);
+      }
+    }
+    return [
+      {
+        id: '1',
+        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde de Moçambique. Estou aqui para guiá-lo no uso do nosso sistema nacional de saúde. Posso ajudar você a encontrar informações detalhadas sobre doenças, procedimentos de enfermagem baseados no manual nacional ou dosagens de medicamentos do FNM. Como posso ser útil hoje?',
+        sender: 'ai',
+        timestamp: new Date(),
+      },
+    ];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,6 +51,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
 
   useEffect(() => {
     scrollToBottom();
+    localStorage.setItem('hermano_chat_history', JSON.stringify(messages));
   }, [messages]);
 
   const handleSend = async () => {
@@ -139,7 +152,9 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
                     ? "bg-secondary text-white rounded-tr-none" 
                     : "bg-white border border-outline-variant/20 text-on-surface rounded-tl-none"
                 )}>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap markdown-body">
+                    <ReactMarkdown>{message.text}</ReactMarkdown>
+                  </div>
                   <p className={cn(
                     "text-[10px] mt-2 opacity-60",
                     message.sender === 'user' ? "text-right" : "text-left"

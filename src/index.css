@@ -68,3 +68,19 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.markdown-body strong {
+  @apply font-bold;
+}
+
+.markdown-body ul {
+  @apply list-disc list-inside my-2;
+}
+
+.markdown-body ol {
+  @apply list-decimal list-inside my-2;
+}
+
+.markdown-body p {
+  @apply mb-2 last:mb-0;
+}

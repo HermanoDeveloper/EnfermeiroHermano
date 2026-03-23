@@ -289,7 +289,7 @@ export default function App() {
     exit: { opacity: 0, y: -10 },
   };
 
-  const transition = {
+  const transition: any = {
     duration: 0.3,
     ease: [0.22, 1, 0.36, 1],
   };
@@ -2328,7 +2328,9 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
   return (
     <div className="flex items-start gap-4">
       <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-        {React.cloneElement(icon as React.ReactElement, { className: cn((icon as React.ReactElement).props.className, "text-primary") })}
+        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { 
+          className: cn((icon.props as any).className, "text-primary") 
+        }) : icon}
       </div>
       <div className="flex-1 border-b border-outline-variant/10 pb-4">
         <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">{label}</p>
