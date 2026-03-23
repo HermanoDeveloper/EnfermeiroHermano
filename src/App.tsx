@@ -222,6 +222,14 @@ export default function App() {
           ...data,
           email: session.user.email
         });
+      } else {
+        // Fallback if profile record doesn't exist yet
+        setProfile({
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || 'Usuário',
+          category: 'non-professional'
+        });
       }
       if (error) console.error('Error fetching profile:', error.message);
     } catch (err) {
@@ -378,9 +386,9 @@ export default function App() {
           />
         );
       case 'signup':
-        return <SignupScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} />;
+        return <SignupScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} onRefreshProfile={fetchProfile} />;
       case 'login':
-        return <LoginScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} />;
+        return <LoginScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} onRefreshProfile={fetchProfile} />;
       default:
         return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
     }
@@ -1410,7 +1418,7 @@ const MONTHS = [
 
 const YEARS = Array.from({ length: 121 }, (_, i) => (new Date().getFullYear() - i).toString());
 
-function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void, onLogin: () => void }) {
+function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (s: Screen) => void, onLogin: () => void, onRefreshProfile: () => Promise<void> }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -1473,21 +1481,22 @@ function SignupScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void
         
         const { error: profileError } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: data.user.id,
             full_name: fullName,
             birth_date: birthDate,
             category,
             other_category: otherCategory,
             phone: `${selectedCountry.code} ${phone}`,
             address,
-          })
-          .eq('id', data.user.id);
+          });
 
         if (profileError) {
           console.error('Error updating profile:', profileError.message);
           // Don't block the user if profile update fails, but log it
         }
         
+        await onRefreshProfile();
         onLogin();
         onNavigate('home');
       }
@@ -2325,7 +2334,7 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
   );
 }
 
-function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void, onLogin: () => void }) {
+function LoginScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (s: Screen) => void, onLogin: () => void, onRefreshProfile: () => Promise<void> }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -2350,6 +2359,7 @@ function LoginScreen({ onNavigate, onLogin }: { onNavigate: (s: Screen) => void,
         setError('Erro ao tentar entrar na conta. Por favor, verifique suas credenciais e conexão.');
         setLoading(false);
       } else {
+        await onRefreshProfile();
         onLogin();
         onNavigate('home');
       }
