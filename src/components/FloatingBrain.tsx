@@ -9,10 +9,11 @@ interface FloatingBrainProps {
   onNavigate: (screen: Screen) => void;
   onSearch: (query: string) => void;
   onShowDisease: (disease: any) => void;
+  onShowProcedure: (procedure: any) => void;
   currentScreen: Screen;
 }
 
-export function FloatingBrain({ onNavigate, onSearch, onShowDisease, currentScreen }: FloatingBrainProps) {
+export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProcedure, currentScreen }: FloatingBrainProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +46,8 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, currentScre
           onSearch(response.command.target);
         } else if (response.command.action === 'show_disease' && response.command.params) {
           onShowDisease(response.command.params);
+        } else if (response.command.action === 'show_procedure' && response.command.params) {
+          onShowProcedure(response.command.params);
         }
       }
       

@@ -581,6 +581,10 @@ export default function App() {
                 setSelectedDisease(disease);
                 setCurrentScreen('disease-detail');
               }}
+              onShowProcedure={(procedure) => {
+                setSelectedProcedure(procedure);
+                setCurrentScreen('procedure-detail');
+              }}
               currentScreen={currentScreen}
             />
 
