@@ -412,15 +412,17 @@ export default function App() {
               <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl">
                 <div className="w-12 h-12 rounded-full bg-primary-fixed overflow-hidden">
                   <img 
-                    src="https://picsum.photos/seed/doctor/200" 
-                    alt="Dr. Carlos" 
+                    src={profile?.avatar_url || "https://picsum.photos/seed/doctor/200"} 
+                    alt={profile?.full_name || "Usuário"} 
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
                 </div>
                 <div>
-                  <p className="font-bold text-on-surface">Dr. Carlos Oliveira</p>
-                  <p className="text-xs text-on-surface-variant">CRM 12345-SP</p>
+                  <p className="font-bold text-on-surface">{profile?.full_name || "Usuário"}</p>
+                  <p className="text-xs text-on-surface-variant">
+                    {CATEGORIES.find(c => c.id === profile?.category)?.label || "Profissional de Saúde"}
+                  </p>
                 </div>
               </div>
 
@@ -616,8 +618,21 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 // --- Screens ---
 
 function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any }) {
+  const getGreeting = () => {
+    if (!profile) return 'Olá! Seja bem vindo.';
+    const firstName = profile.full_name?.split(' ')[0] || '';
+    const categoryObj = CATEGORIES.find(c => c.id === profile.category);
+    const abbreviation = categoryObj?.abbreviation ? `${categoryObj.abbreviation} ` : '';
+    return `Olá, ${abbreviation}${firstName}! Seja bem vindo.`;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-4 space-y-10">
+      <div className="mb-2">
+        <h2 className="font-headline text-2xl font-bold text-on-surface">{getGreeting()}</h2>
+        <p className="text-on-surface-variant text-sm">O que você gostaria de consultar hoje?</p>
+      </div>
+
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="col-span-2 bg-gradient-to-br from-primary-fixed to-secondary-fixed p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
           <div className="relative z-10">
@@ -1356,15 +1371,16 @@ const COUNTRIES = [
 ];
 
 const CATEGORIES = [
-  { id: 'doctor', label: 'Médico(a)' },
-  { id: 'nurse', label: 'Enfermeiro(a)' },
-  { id: 'technician', label: 'Técnico(a) de Enfermagem' },
-  { id: 'general-medicine-tech', label: 'Técnico(a) de Medicina Geral' },
-  { id: 'lab-tech', label: 'Técnico(a) de Laboratório' },
-  { id: 'physiotherapist', label: 'Fisioterapeuta' },
-  { id: 'pharmacist', label: 'Farmacêutico(a)' },
-  { id: 'non-professional', label: 'Não sou profissional de saúde' },
-  { id: 'other', label: 'Outro (especificar)' },
+  { id: 'doctor', label: 'Médico(a)', abbreviation: 'Dr(a).' },
+  { id: 'nurse', label: 'Enfermeiro(a)', abbreviation: 'Enf.' },
+  { id: 'technician', label: 'Técnico(a) de Enfermagem', abbreviation: 'Téc.' },
+  { id: 'general-medicine-tech', label: 'Técnico(a) de Medicina Geral', abbreviation: 'TMG.' },
+  { id: 'lab-tech', label: 'Técnico(a) de Laboratório', abbreviation: 'Téc. Lab.' },
+  { id: 'physiotherapist', label: 'Fisioterapeuta', abbreviation: 'Fis.' },
+  { id: 'pharmacist', label: 'Farmacêutico(a)', abbreviation: 'Far.' },
+  { id: 'student', label: 'Estudante', abbreviation: 'Est.' },
+  { id: 'non-professional', label: 'Não sou profissional de saúde', abbreviation: '' },
+  { id: 'other', label: 'Outro (especificar)', abbreviation: '' },
 ];
 
 const MONTHS = [
