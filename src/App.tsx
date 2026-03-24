@@ -80,10 +80,52 @@ export default function App() {
   const [isSearchingAI, setIsSearchingAI] = useState(false);
   const [isEnhancingProcedure, setIsEnhancingProcedure] = useState(false);
   const [isSelectingProcedureAI, setIsSelectingProcedureAI] = useState<string | null>(null);
+  const [recentHistory, setRecentHistory] = useState<any[]>([]);
+
+  const fetchHistory = async () => {
+    if (!session?.user?.id) return;
+    const { data, error } = await supabase
+      .from('search_history')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (data) setRecentHistory(data);
+    if (error) console.error('Error fetching history:', error);
+  };
+
+  const recordHistory = async (query: string, type: string = 'search', metadata: any = {}) => {
+    if (!session?.user?.id) return;
+    const { error } = await supabase
+      .from('search_history')
+      .insert({
+        user_id: session.user.id,
+        query,
+        type,
+        metadata
+      });
+    if (error) console.error('Error recording history:', error);
+    else fetchHistory();
+  };
+
+  const handleSelectDisease = (d: Disease) => {
+    setSelectedDisease(d);
+    setCurrentScreen('disease-detail');
+    recordHistory(d.name, 'view', { id: d.id, category: 'disease' });
+  };
+
+  const handleSelectProcedure = (p: Procedure) => {
+    setSelectedProcedure(p);
+    setCurrentScreen('procedure-detail');
+    recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
+  };
 
   const handleGlobalSearch = async () => {
     if (!searchQuery.trim()) return;
     
+    recordHistory(searchQuery, 'search');
+
     // If we are on diseases screen or home, we can trigger AI search for diseases
     if (currentScreen === 'diseases' || currentScreen === 'home') {
       setIsSearchingAI(true);
@@ -203,8 +245,10 @@ export default function App() {
   useEffect(() => {
     if (session?.user) {
       fetchProfile();
+      fetchHistory();
     } else {
       setProfile(null);
+      setRecentHistory([]);
     }
   }, [session]);
 
@@ -364,14 +408,17 @@ export default function App() {
 
     switch (currentScreen) {
       case 'home':
-        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
+        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} profile={profile} recentHistory={recentHistory} />;
       case 'diseases':
-        return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} searchQuery={searchQuery} onSearch={setSearchQuery} />;
+        return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} searchQuery={searchQuery} onSearch={setSearchQuery} />;
       case 'procedures':
         return (
           <ProceduresScreen 
             onNavigate={setCurrentScreen} 
-            onSelectProcedure={handleSelectProcedureWithAI}
+            onSelectProcedure={async (p) => {
+              await handleSelectProcedureWithAI(p);
+              recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
+            }}
             searchQuery={searchQuery}
             onSearch={setSearchQuery}
             onGlobalSearch={handleGlobalSearch}
@@ -406,7 +453,7 @@ export default function App() {
       case 'login':
         return <LoginScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} onRefreshProfile={fetchProfile} />;
       default:
-        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }} profile={profile} />;
+        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} profile={profile} recentHistory={recentHistory} />;
     }
   };
 
@@ -655,7 +702,7 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 // --- Screens ---
 
-function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any }) {
+function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHistory }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any, recentHistory: any[] }) {
   const getGreeting = () => {
     if (!profile) return 'Olá! Seja bem vindo.';
     const firstName = profile.full_name?.split(' ')[0] || '';
@@ -663,6 +710,16 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
     const abbreviation = categoryObj?.abbreviation ? `${categoryObj.abbreviation} ` : '';
     return `Olá, ${abbreviation}${firstName}! Seja bem vindo.`;
   };
+
+  // Map history items to displayable content
+  const historyToDisplay = recentHistory.filter(h => h.type === 'view').map(h => {
+    if (h.metadata?.category === 'disease') {
+      return diseases.find(d => d.id === h.metadata.id);
+    }
+    return null;
+  }).filter(Boolean) as Disease[];
+
+  const displayItems = historyToDisplay.length > 0 ? historyToDisplay.slice(0, 3) : diseases.slice(0, 3);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-4 space-y-10">
@@ -719,7 +776,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile }: { diseas
           <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {diseases.slice(0, 3).map((disease) => (
+          {displayItems.map((disease) => (
             <div 
               key={disease.id}
               onClick={() => onSelectDisease(disease)}
@@ -1442,6 +1499,7 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState('Masculino');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -1504,6 +1562,7 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
           .upsert({
             id: data.user.id,
             full_name: fullName,
+            gender,
             birth_date: birthDate,
             category,
             other_category: otherCategory,
@@ -1635,6 +1694,34 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
                     placeholder="João Silva"
                     className="w-full pl-12 pr-4 py-3 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all placeholder:text-outline"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider ml-1">Gênero</label>
+                <div className="flex gap-4">
+                  <label className="flex-1 flex items-center gap-2 p-3 bg-surface-container-high rounded-2xl cursor-pointer hover:bg-surface-container-highest transition-all">
+                    <input 
+                      type="radio" 
+                      name="gender" 
+                      value="Masculino" 
+                      checked={gender === 'Masculino'}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-4 h-4 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-on-surface">Masculino</span>
+                  </label>
+                  <label className="flex-1 flex items-center gap-2 p-3 bg-surface-container-high rounded-2xl cursor-pointer hover:bg-surface-container-highest transition-all">
+                    <input 
+                      type="radio" 
+                      name="gender" 
+                      value="Feminino" 
+                      checked={gender === 'Feminino'}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-4 h-4 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-on-surface">Feminino</span>
+                  </label>
                 </div>
               </div>
 
@@ -1981,6 +2068,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [editedData, setEditedData] = useState({
     full_name: '',
+    gender: '',
     phone: '',
     address: '',
     birth_date: '',
@@ -1995,6 +2083,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
     if (profile) {
       setEditedData({
         full_name: profile.full_name || '',
+        gender: profile.gender || 'Masculino',
         phone: profile.phone || '',
         address: profile.address || '',
         birth_date: profile.birth_date || '',
@@ -2056,6 +2145,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
       const updateData = {
         id: profile.id,
         full_name: editedData.full_name?.trim() || null,
+        gender: editedData.gender || null,
         phone: editedData.phone?.trim() || null,
         address: editedData.address?.trim() || null,
         birth_date: editedData.birth_date || null,
@@ -2186,7 +2276,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
         </div>
         
         {isEditing ? (
-          <div className="max-w-xs mx-auto space-y-2">
+          <div className="max-w-xs mx-auto space-y-4">
             <input 
               type="text"
               value={editedData.full_name}
@@ -2194,6 +2284,28 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
               placeholder="Nome Completo"
               className="w-full px-4 py-2 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary text-center font-headline text-xl font-bold text-on-surface"
             />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditedData({ ...editedData, gender: 'Masculino' })}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all",
+                  editedData.gender === 'Masculino' ? "bg-primary text-white" : "bg-surface-container-high text-on-surface-variant"
+                )}
+              >
+                Masculino
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditedData({ ...editedData, gender: 'Feminino' })}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all",
+                  editedData.gender === 'Feminino' ? "bg-primary text-white" : "bg-surface-container-high text-on-surface-variant"
+                )}
+              >
+                Feminino
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -2327,6 +2439,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
             </>
           ) : (
             <>
+              <ProfileField icon={<User className="w-5 h-5" />} label="Gênero" value={profile?.gender || 'Não informado'} />
               <ProfileField icon={<Phone className="w-5 h-5" />} label="Telefone" value={profile?.phone || 'Não informado'} />
               <ProfileField icon={<MapPin className="w-5 h-5" />} label="Endereço" value={profile?.address || 'Não informado'} />
               <ProfileField icon={<Calendar className="w-5 h-5" />} label="Data de Nascimento" value={formatDate(profile?.birth_date)} />
