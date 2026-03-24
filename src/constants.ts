@@ -16,6 +16,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Recente',
     type: 'Chronic',
     localHistory: 'Moçambique tem uma das maiores prevalências de anemia falciforme na África Austral, com programas de rastreio neonatal em expansão.',
+    imageUrl: 'https://images.unsplash.com/photo-1579154712747-4c8000799908?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '5',
@@ -70,6 +71,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '3 dias atrás',
     type: 'Chronic',
     localHistory: 'A asma é comum em áreas urbanas de Moçambique, onde a poluição do ar e as condições alérgicas contribuem para a frequência das crises.',
+    imageUrl: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '7',
@@ -86,6 +88,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Atualizado',
     type: 'Infectious',
     localHistory: 'Surtos cíclicos de cólera ocorrem em Moçambique, especialmente durante a época das chuvas e após ciclones, exigindo respostas rápidas de saúde pública.',
+    imageUrl: 'https://images.unsplash.com/photo-1541675154750-0444c7d51e8e?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '3',
@@ -168,6 +171,7 @@ export const DISEASES: Disease[] = [
     type: 'Chronic',
     subtypes: ['Tipo 1', 'Tipo 2', 'Gestacional'],
     localHistory: 'O diagnóstico de diabetes tem aumentado em Moçambique, desafiando o sistema de saúde a fornecer tratamento contínuo e educação para o autocuidado.',
+    imageUrl: 'https://images.unsplash.com/photo-1508847154043-be5407fcaa5a?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '4',
@@ -221,6 +225,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '2 dias atrás',
     type: 'Neurological',
     localHistory: 'Embora subdiagnosticada, a demência e o Alzheimer começam a ser reconhecidos como problemas de saúde pública em Moçambique com o aumento da esperança de vida.',
+    imageUrl: 'https://images.unsplash.com/photo-1516302752625-fcc3c50ae61f?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '14',
@@ -237,6 +242,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Semana passada',
     type: 'Neurological',
     localHistory: 'Em Moçambique, a epilepsia ainda enfrenta estigma social, exigindo esforços de educação comunitária e acesso a medicamentos básicos.',
+    imageUrl: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '13',
@@ -253,6 +259,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '3 dias atrás',
     type: 'Chronic',
     localHistory: 'A gastrite é uma queixa comum em Moçambique, muitas vezes associada a hábitos alimentares e stress.',
+    imageUrl: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '1',
@@ -320,6 +327,7 @@ export const DISEASES: Disease[] = [
     type: 'Chronic',
     subtypes: ['Primária (Essencial)', 'Secundária'],
     localHistory: 'Em Moçambique, a hipertensão é uma das principais causas de doenças cardiovasculares, afetando uma parcela crescente da população adulta urbana e rural devido a mudanças na dieta e estilo de vida.',
+    imageUrl: 'https://images.unsplash.com/photo-1628177142898-93e36e4e3a50?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '8',
@@ -336,6 +344,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Hoje',
     type: 'Infectious',
     localHistory: 'Moçambique enfrenta uma das maiores epidemias de HIV do mundo, mas tem feito progressos significativos na expansão do acesso ao tratamento gratuito.',
+    imageUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '15',
@@ -352,6 +361,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Recente',
     type: 'Chronic',
     localHistory: 'O acesso à hemodiálise em Moçambique tem crescido, mas a prevenção da hipertensão e diabetes continua sendo a estratégia principal.',
+    imageUrl: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '9',
@@ -368,6 +378,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '1h atrás',
     type: 'Infectious',
     localHistory: 'A malária é a principal causa de consultas médicas e internamentos em Moçambique, sendo endêmica em todo o país.',
+    imageUrl: 'https://images.unsplash.com/photo-1603398938378-e54eab446ddd?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '12',
@@ -384,6 +395,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Recente',
     type: 'Infectious',
     localHistory: 'Surtos de meningite bacteriana são monitorados de perto, especialmente em áreas de alta densidade populacional.',
+    imageUrl: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '2',
@@ -442,6 +454,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '5h atrás',
     type: 'Infectious',
     localHistory: 'A pneumonia continua sendo uma das principais causas de mortalidade infantil em Moçambique, frequentemente associada a condições de habitação e nutrição.',
+    imageUrl: 'https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '11',
@@ -458,6 +471,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Ontem',
     type: 'Infectious',
     localHistory: 'Campanhas de vacinação em massa são frequentes em Moçambique para prevenir surtos de sarampo em crianças.',
+    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '10',
@@ -474,6 +488,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '4h atrás',
     type: 'Infectious',
     localHistory: 'Moçambique é um dos países com maior carga de TB e coinfecção TB/HIV, com esforços focados na detecção precoce e conclusão do tratamento.',
+    imageUrl: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?q=80&w=1200&auto=format&fit=crop',
   },
 ];
 

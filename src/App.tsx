@@ -308,7 +308,7 @@ export default function App() {
     if (!isSupabaseConfigured) return;
     try {
       const { data: diseasesData, error: diseasesError } = await supabase.from('diseases').select('*');
-      if (diseasesData) {
+      if (diseasesData && diseasesData.length > 0) {
         setDiseases(diseasesData);
       } else if (diseasesError) {
         // Only log if it's not a network error, or if we are not in dev mode
@@ -318,7 +318,7 @@ export default function App() {
       }
 
       const { data: proceduresData, error: proceduresError } = await supabase.from('procedures').select('*');
-      if (proceduresData) {
+      if (proceduresData && proceduresData.length > 0) {
         setProcedures(proceduresData);
       } else if (proceduresError) {
         if (!proceduresError.message.includes('fetch') || !isDev) {
@@ -783,8 +783,12 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHist
               className="bg-surface-container-lowest p-4 rounded-2xl flex items-center gap-4 relative ambient-shadow cursor-pointer hover:bg-surface-container-low transition-all"
             >
               <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-secondary rounded-full" />
-              <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center">
-                <Activity className="w-6 h-6 text-secondary" />
+              <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center overflow-hidden">
+                {disease.imageUrl ? (
+                  <img src={disease.imageUrl} alt={disease.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <Activity className="w-6 h-6 text-secondary" />
+                )}
               </div>
               <div className="flex-1">
                 <h4 className="font-bold text-on-surface">{disease.name}</h4>
@@ -859,19 +863,26 @@ function DiseasesScreen({ diseases, onNavigate, onSelectDisease, searchQuery, on
                 className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-surface-container-low transition-all ambient-shadow relative overflow-hidden transform-gpu"
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary rounded-r-full" />
-                <div className="flex-1 pr-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 rounded",
-                      disease.type === 'Chronic' ? "bg-secondary-container/20 text-secondary" :
-                      disease.type === 'Infectious' ? "bg-tertiary-fixed/30 text-tertiary" :
-                      "bg-surface-container-high text-on-surface-variant"
-                    )}>
-                      {typeLabels[disease.type] || disease.type}
-                    </span>
-                    <h3 className="font-headline font-bold text-on-surface">{disease.name}</h3>
+                <div className="flex items-center gap-4 flex-1 pr-4">
+                  {disease.imageUrl && (
+                    <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 ambient-shadow">
+                      <img src={disease.imageUrl} alt={disease.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 rounded",
+                        disease.type === 'Chronic' ? "bg-secondary-container/20 text-secondary" :
+                        disease.type === 'Infectious' ? "bg-tertiary-fixed/30 text-tertiary" :
+                        "bg-surface-container-high text-on-surface-variant"
+                      )}>
+                        {typeLabels[disease.type] || disease.type}
+                      </span>
+                      <h3 className="font-headline font-bold text-on-surface">{disease.name}</h3>
+                    </div>
+                    <p className="text-sm text-on-surface-variant line-clamp-1">{disease.description}</p>
                   </div>
-                  <p className="text-sm text-on-surface-variant line-clamp-1">{disease.description}</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-outline-variant group-hover:text-primary transition-colors" />
               </div>
@@ -1143,7 +1154,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       <section className="relative max-w-4xl mx-auto w-full isolate">
         <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group will-change-transform transform-gpu">
           <img 
-            src={`https://picsum.photos/seed/${disease.name}/1200/600`} 
+            src={disease.imageUrl || `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},medical`} 
             alt={disease.name} 
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 will-change-transform"
             referrerPolicy="no-referrer"

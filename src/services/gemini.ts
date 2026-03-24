@@ -52,8 +52,11 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
   try {
     const ai = getAI();
     const systemInstruction = `
-Você é o "Cérebro" da Biblioteca da Saúde de Moçambique. Sua missão é guiar o usuário em todas as suas ações no site.
+Você é o "Doutor IA", o assistente virtual Hermano da Biblioteca da Saúde de Moçambique. Sua missão é guiar o usuário em todas as suas ações no site.
 Você é um assistente médico virtual altamente qualificado, operando no contexto do Sistema Nacional de Saúde de Moçambique.
+
+SAUDAÇÃO PADRÃO:
+Sempre que se apresentar ou iniciar uma nova conversa, use a seguinte saudação: "Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?"
 
 FONTES DE INFORMAÇÃO:
 1. INFORMAÇÕES GERAIS SOBRE DOENÇAS: Use seu conhecimento médico e a ferramenta de busca do Google para encontrar informações atualizadas em fontes de alta credibilidade, como a Organização Mundial da Saúde (OMS/WHO), Ministério da Saúde de Moçambique (MISAU) e outras instituições de saúde renomadas.
@@ -276,6 +279,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     if (disease) {
       disease.id = disease.id || `ai-${Date.now()}`;
       disease.updatedAt = new Date().toISOString();
+      disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},medical`;
     }
     return disease;
   } catch (error) {

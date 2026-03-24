@@ -23,6 +23,7 @@ export interface Disease {
   type: 'Chronic' | 'Infectious' | 'Neurological';
   subtypes?: string[];
   localHistory?: string;
+  imageUrl?: string;
 }
 
 export interface Procedure {
