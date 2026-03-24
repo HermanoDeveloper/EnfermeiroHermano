@@ -36,7 +36,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
     return [
       {
         id: '1',
-        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde de Moçambique. Estou aqui para guiá-lo no uso do nosso sistema nacional de saúde. Posso ajudar você a encontrar informações detalhadas sobre doenças, procedimentos de enfermagem baseados no manual nacional ou dosagens de medicamentos do FNM. Como posso ser útil hoje?',
+        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
         sender: 'ai',
         timestamp: new Date(),
       },
@@ -122,7 +122,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
             <Bot className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="font-headline font-bold text-lg text-on-surface">Assistente IA</h1>
+            <h1 className="font-headline font-bold text-lg text-on-surface">Doutor IA</h1>
             <p className="text-xs text-primary font-medium flex items-center gap-1">
               <Sparkles className="w-3 h-3" /> Baseado no Formulário Nacional
             </p>

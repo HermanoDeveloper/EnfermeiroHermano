@@ -40,7 +40,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
     return [
       {
         id: '1',
-        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde de Moçambique. Estou aqui para guiá-lo no uso do nosso sistema nacional de saúde. Posso ajudar você a encontrar informações detalhadas sobre doenças, procedimentos de enfermagem baseados no manual nacional ou dosagens de medicamentos do FNM. Como posso ser útil hoje?',
+        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
         sender: 'ai',
         timestamp: new Date(),
       },
@@ -144,7 +144,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
             <div className="bg-primary p-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5" />
-                <span className="font-headline font-bold">Cérebro Central</span>
+                <span className="font-headline font-bold">Doutor IA</span>
               </div>
               <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
                 <X className="w-5 h-5" />
@@ -251,7 +251,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
         )}>
           {isOpen ? <X className="w-6 h-6" /> : <Bot className="w-6 h-6" />}
         </div>
-        <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Cérebro</span>
+        <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Doutor IA</span>
         {!isOpen && (
           <div className="absolute top-1 right-3 w-3 h-3 bg-secondary rounded-full border border-white flex items-center justify-center">
             <Sparkles className="w-2 h-2 text-white" />

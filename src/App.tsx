@@ -509,7 +509,7 @@ export default function App() {
 
               <nav className="flex-1 space-y-2">
                 <SidebarItem icon={<Home className="w-5 h-5" />} label="Painel Principal" onClick={() => { setCurrentScreen('home'); setIsSidebarOpen(false); }} active={currentScreen === 'home'} />
-                <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Assistente IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
+                <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Doutor IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
                 <SidebarItem icon={<Activity className="w-5 h-5" />} label="Protocolos Clínicos" onClick={() => { setCurrentScreen('diseases'); setIsSidebarOpen(false); }} active={currentScreen === 'diseases'} />
                 <SidebarItem icon={<Stethoscope className="w-5 h-5" />} label="Procedimentos" onClick={() => { setCurrentScreen('procedures'); setIsSidebarOpen(false); }} active={currentScreen === 'procedures'} />
                 <SidebarItem icon={<ShieldCheck className="w-5 h-5" />} label="Segurança" onClick={() => setIsSidebarOpen(false)} />
@@ -746,7 +746,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHist
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1">
-            <h3 className="font-headline font-bold text-on-primary-fixed">Cérebro Central</h3>
+            <h3 className="font-headline font-bold text-on-primary-fixed">Doutor IA</h3>
             <p className="text-xs text-on-primary-fixed/70">Guia de medicamentos e ações do site</p>
           </div>
           <ChevronRight className="w-5 h-5 text-on-primary-fixed/50" />
