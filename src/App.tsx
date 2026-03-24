@@ -2044,28 +2044,59 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
   };
 
   const handleSave = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      setMessage({ type: 'error', text: 'Sessão inválida. Por favor, faça login novamente.' });
+      return;
+    }
+    
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: profile.id,
-          full_name: editedData.full_name,
-          phone: editedData.phone,
-          address: editedData.address,
-          birth_date: editedData.birth_date,
-          category: editedData.category,
-          other_category: editedData.other_category
-        });
+      // Prepare data, ensuring we don't send empty strings for dates
+      // and providing fallback for required fields if any
+      const updateData = {
+        id: profile.id,
+        full_name: editedData.full_name?.trim() || null,
+        phone: editedData.phone?.trim() || null,
+        address: editedData.address?.trim() || null,
+        birth_date: editedData.birth_date || null,
+        category: editedData.category || null,
+        other_category: editedData.other_category?.trim() || null,
+      };
 
-      if (error) throw error;
+      console.log('Attempting to update profile data:', updateData);
+
+      const { error, data, status } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', profile.id);
+
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          status
+        });
+        throw error;
+      }
+      
+      console.log('Profile saved successfully:', data);
+      
       await onRefreshProfile();
       setIsEditing(false);
       setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      setMessage({ type: 'error', text: 'Erro ao atualizar o perfil. Tente novamente.' });
+    } catch (error: any) {
+      console.error('Full error object:', error);
+      
+      let errorText = 'Erro ao atualizar o perfil.';
+      if (error.code === '42501') {
+        errorText = 'Erro de permissão: Você não tem autorização para atualizar este perfil.';
+      } else if (error.message) {
+        errorText = `Erro: ${error.message}`;
+      }
+      
+      setMessage({ type: 'error', text: `${errorText} Tente novamente.` });
     } finally {
       setLoading(false);
     }
