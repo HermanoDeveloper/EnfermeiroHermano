@@ -20,6 +20,7 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   command?: AIResponse['command'];
+  suggestions?: string[];
 }
 
 export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProcedure, currentScreen }: FloatingBrainProps) {
@@ -49,32 +50,38 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
     if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      if (inputRef.current) inputRef.current.focus();
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      document.body.style.overflow = '';
     }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen, messages]);
 
   useEffect(() => {
     localStorage.setItem('hermano_brain_history', JSON.stringify(messages));
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overrideInput?: string) => {
+    const textToSend = typeof overrideInput === 'string' ? overrideInput : input;
+    if (!textToSend.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: input,
+      text: textToSend,
       sender: 'user',
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
-    const currentInput = input;
-    setInput('');
+    const currentInput = textToSend;
+    if (!overrideInput) setInput('');
 
     try {
       const response = await askAI(currentInput, { currentScreen });
@@ -84,7 +91,8 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
         text: response.text,
         sender: 'ai',
         timestamp: new Date(),
-        command: response.command
+        command: response.command,
+        suggestions: response.suggestions
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -117,12 +125,21 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
     <div className="relative flex flex-col items-center">
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90vw] max-w-[400px] bg-white rounded-3xl shadow-2xl border border-primary/10 overflow-hidden z-[100]"
-          >
+          <>
+            {/* Backdrop Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[99]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90vw] max-w-[400px] bg-white rounded-3xl shadow-2xl border border-primary/10 overflow-hidden z-[100]"
+            >
             {/* Header */}
             <div className="bg-primary p-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
@@ -158,10 +175,17 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
                         <div className="leading-relaxed">
                           <ReactMarkdown>{message.text}</ReactMarkdown>
                         </div>
-                        {message.command && message.command.action !== 'none' && (
-                          <div className="flex items-center gap-2 text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/5 p-1.5 rounded-lg border border-primary/10">
-                            <Command className="w-2.5 h-2.5" />
-                            Ação: {message.command.action}
+                        {message.suggestions && message.suggestions.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {message.suggestions.map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleSend(suggestion)}
+                                className="text-[10px] bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 px-2.5 py-1.5 rounded-full transition-colors text-left font-medium"
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -200,7 +224,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
                   className="w-full bg-white border border-outline-variant/30 rounded-2xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={!input.trim() || isLoading}
                   className="absolute right-1.5 top-1.5 p-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
                 >
@@ -209,7 +233,8 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
               </div>
             </div>
           </motion.div>
-        )}
+        </>
+      )}
       </AnimatePresence>
 
       {/* Toggle Button (Navbar Style) */}

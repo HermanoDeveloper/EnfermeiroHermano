@@ -12,6 +12,7 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   command?: any;
+  suggestions?: string[];
 }
 
 interface AIAssistantScreenProps {
@@ -54,28 +55,31 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
     localStorage.setItem('hermano_chat_history', JSON.stringify(messages));
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overrideInput?: string) => {
+    const textToSend = typeof overrideInput === 'string' ? overrideInput : input;
+    if (!textToSend.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: input,
+      text: textToSend,
       sender: 'user',
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    const currentInput = textToSend;
+    if (!overrideInput) setInput('');
     setIsLoading(true);
 
     try {
-      const response = await askAI(input, { currentScreen: 'ai-assistant' });
+      const response = await askAI(currentInput, { currentScreen: 'ai-assistant' });
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: response.text,
         sender: 'ai',
         timestamp: new Date(),
-        command: response.command
+        command: response.command,
+        suggestions: response.suggestions
       };
       setMessages((prev) => [...prev, aiMessage]);
 
@@ -155,6 +159,19 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
                   <div className="text-sm leading-relaxed whitespace-pre-wrap markdown-body">
                     <ReactMarkdown>{message.text}</ReactMarkdown>
                   </div>
+                  {message.suggestions && message.suggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {message.suggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSend(suggestion)}
+                          className="text-xs bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-full transition-colors text-left font-medium"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <p className={cn(
                     "text-[10px] mt-2 opacity-60",
                     message.sender === 'user' ? "text-right" : "text-left"
@@ -201,7 +218,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
               className="w-full bg-surface-container-low border border-outline-variant/30 rounded-2xl py-4 pl-6 pr-14 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!input.trim() || isLoading}
               className="absolute right-2 p-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 disabled:grayscale"
             >

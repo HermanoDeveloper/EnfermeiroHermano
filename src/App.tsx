@@ -224,12 +224,28 @@ export default function App() {
         });
       } else {
         // Fallback if profile record doesn't exist yet
-        setProfile({
+        const fallbackProfile = {
           id: session.user.id,
           email: session.user.email,
           full_name: session.user.user_metadata?.full_name || 'Usuário',
-          category: 'non-professional'
-        });
+          category: 'non-professional',
+          phone: '',
+          address: '',
+          birth_date: '',
+          other_category: ''
+        };
+        setProfile(fallbackProfile);
+        
+        // Try to create the profile record if it doesn't exist to avoid future missing data issues
+        try {
+          await supabase.from('profiles').upsert({
+            id: fallbackProfile.id,
+            full_name: fallbackProfile.full_name,
+            category: fallbackProfile.category
+          });
+        } catch (upsertErr) {
+          console.error('Error auto-creating profile:', upsertErr);
+        }
       }
       if (error) console.error('Error fetching profile:', error.message);
     } catch (err) {
@@ -2033,15 +2049,15 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: profile.id,
           full_name: editedData.full_name,
           phone: editedData.phone,
           address: editedData.address,
           birth_date: editedData.birth_date,
           category: editedData.category,
           other_category: editedData.other_category
-        })
-        .eq('id', profile.id);
+        });
 
       if (error) throw error;
       await onRefreshProfile();
@@ -2283,7 +2299,15 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
               <ProfileField icon={<Phone className="w-5 h-5" />} label="Telefone" value={profile?.phone || 'Não informado'} />
               <ProfileField icon={<MapPin className="w-5 h-5" />} label="Endereço" value={profile?.address || 'Não informado'} />
               <ProfileField icon={<Calendar className="w-5 h-5" />} label="Data de Nascimento" value={formatDate(profile?.birth_date)} />
-              <ProfileField icon={<Briefcase className="w-5 h-5" />} label="Categoria" value={CATEGORIES.find(c => c.id === profile?.category)?.label || 'Não informada'} />
+              <ProfileField 
+                icon={<Briefcase className="w-5 h-5" />} 
+                label="Categoria" 
+                value={
+                  profile?.category === 'other' 
+                    ? `Outro (${profile?.other_category || 'Não especificado'})`
+                    : (CATEGORIES.find(c => c.id === profile?.category)?.label || 'Não informada')
+                } 
+              />
             </>
           )}
         </div>

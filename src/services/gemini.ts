@@ -24,6 +24,7 @@ export interface AIResponse {
     target?: string;
     params?: any;
   };
+  suggestions?: string[];
 }
 
 function extractJSON(text: string): any {
@@ -70,6 +71,7 @@ AÇÕES QUE VOCÊ PODE COMANDAR:
 REGRAS DE RESPOSTA:
 - Seja proativo, autoritário e gentil.
 - Use formatação Markdown simples (como **negrito**) para destacar nomes de medicamentos, doses, doenças ou termos importantes.
+- Sempre forneça 2 a 3 sugestões de perguntas curtas e relevantes que o usuário possa fazer em seguida (no campo 'suggestions').
 - Se o usuário perguntar sobre uma doença, tente primeiro encontrar no banco de dados local. Se não encontrar, use a busca para fornecer detalhes estruturados.
 - Se o usuário perguntar sobre um procedimento de enfermagem, use EXCLUSIVAMENTE o Manual de Procedimentos Básicos de Enfermagem fornecido abaixo.
 - Ao falar de medicamentos, cite sempre que as informações provêm do FNM de Moçambique.
@@ -97,6 +99,11 @@ ${JSON.stringify(currentContext || {})}
             type: Type.OBJECT,
             properties: {
               text: { type: Type.STRING, description: "A resposta textual para o usuário." },
+              suggestions: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING },
+                description: "2-3 sugestões de perguntas curtas de acompanhamento."
+              },
               command: {
                 type: Type.OBJECT,
                 properties: {
@@ -124,6 +131,11 @@ ${JSON.stringify(currentContext || {})}
             type: Type.OBJECT,
             properties: {
               text: { type: Type.STRING, description: "A resposta textual para o usuário." },
+              suggestions: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING },
+                description: "2-3 sugestões de perguntas curtas de acompanhamento."
+              },
               command: {
                 type: Type.OBJECT,
                 properties: {
