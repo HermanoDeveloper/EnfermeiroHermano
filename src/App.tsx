@@ -91,6 +91,8 @@ export default function App() {
   const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
   const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDev);
   const [isInitializing, setIsInitializing] = useState(!isDev);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
+  const [primaryColor, setPrimaryColor] = useState<string>(() => localStorage.getItem('primaryColor') || '#00478d');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState<string | null>(null);
   const [isSearchingAI, setIsSearchingAI] = useState(false);
@@ -374,6 +376,8 @@ export default function App() {
 
   // Redirect to login if not logged in
   useEffect(() => {
+    if (isInitializing) return;
+
     if (!isLoggedIn && currentScreen !== 'signup' && currentScreen !== 'login') {
       setCurrentScreen('login');
     } else if (isLoggedIn && (currentScreen === 'login' || currentScreen === 'signup')) {
@@ -384,16 +388,46 @@ export default function App() {
         setCurrentScreen('home');
       }
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isInitializing]);
+
+  // Apply theme
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // Apply primary color
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.style.setProperty('--primary-color', primaryColor);
+    
+    if (theme === 'dark') {
+      // In dark mode, container is a very dark version of primary
+      root.style.setProperty('--primary-container', primaryColor + '33'); // 20% opacity
+      root.style.setProperty('--on-primary-container', primaryColor); // Full primary for text
+    } else {
+      // In light mode, container is a very light version of primary
+      root.style.setProperty('--primary-container', primaryColor + '15'); // 8% opacity
+      root.style.setProperty('--on-primary-container', primaryColor);
+    }
+    
+    localStorage.setItem('primaryColor', primaryColor);
+  }, [primaryColor, theme]);
 
   // Persist state
   useEffect(() => {
+    if (isInitializing) return;
     localStorage.setItem('currentScreen', currentScreen);
     if (selectedDisease) localStorage.setItem('selectedDisease', JSON.stringify(selectedDisease));
     else localStorage.removeItem('selectedDisease');
     if (selectedProcedure) localStorage.setItem('selectedProcedure', JSON.stringify(selectedProcedure));
     else localStorage.removeItem('selectedProcedure');
-  }, [currentScreen, selectedDisease, selectedProcedure]);
+  }, [currentScreen, selectedDisease, selectedProcedure, isInitializing]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -550,14 +584,14 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-white/20 z-[60] backdrop-blur-[2px]"
+              className="fixed inset-0 bg-black/20 dark:bg-black/60 z-[60] backdrop-blur-[2px]"
             />
             <motion.aside
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 bottom-0 w-[280px] bg-surface z-[70] shadow-2xl p-6 flex flex-col gap-8"
+              className="fixed top-0 left-0 bottom-0 w-[280px] bg-surface dark:bg-surface-container z-[70] shadow-2xl p-6 flex flex-col gap-8"
             >
               <div className="flex items-center justify-between">
                 <span className="font-headline font-bold text-xl tracking-tighter text-primary">
@@ -568,7 +602,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl">
+              <div className="flex items-center gap-4 p-4 bg-surface-container-low dark:bg-surface-container-high rounded-2xl">
                 <div className="w-12 h-12 rounded-full bg-primary-fixed overflow-hidden">
                   <img 
                     src={profile?.avatar_url || "https://picsum.photos/seed/doctor/200"} 
@@ -585,12 +619,58 @@ export default function App() {
                 </div>
               </div>
 
-              <nav className="flex-1 space-y-2">
+              <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
                 <SidebarItem icon={<Home className="w-5 h-5" />} label="Painel Principal" onClick={() => { setCurrentScreen('home'); setIsSidebarOpen(false); }} active={currentScreen === 'home'} />
                 <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Doutor IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
                 <SidebarItem icon={<Activity className="w-5 h-5" />} label="Protocolos Clínicos" onClick={() => { setCurrentScreen('diseases'); setIsSidebarOpen(false); }} active={currentScreen === 'diseases'} />
                 <SidebarItem icon={<Stethoscope className="w-5 h-5" />} label="Procedimentos" onClick={() => { setCurrentScreen('procedures'); setIsSidebarOpen(false); }} active={currentScreen === 'procedures'} />
-                <SidebarItem icon={<ShieldCheck className="w-5 h-5" />} label="Segurança" onClick={() => setIsSidebarOpen(false)} />
+                
+                <div className="pt-4 pb-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-outline px-4 mb-4">Personalização</p>
+                  
+                  <div className="px-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-on-surface">Tema</span>
+                      <div className="flex bg-surface-container dark:bg-surface-container-high rounded-full p-1">
+                        <button 
+                          onClick={() => setTheme('light')}
+                          className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all",
+                            theme === 'light' ? "bg-primary text-white shadow-sm" : "text-on-surface-variant"
+                          )}
+                        >
+                          Claro
+                        </button>
+                        <button 
+                          onClick={() => setTheme('dark')}
+                          className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all",
+                            theme === 'dark' ? "bg-primary text-white shadow-sm" : "text-on-surface-variant"
+                          )}
+                        >
+                          Escuro
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-sm font-bold text-on-surface">Cor Principal</span>
+                      <div className="flex flex-wrap gap-2">
+                        {['#00478d', '#00658d', '#793100', '#1a5f35', '#5f1a5f', '#ba1a1a'].map(color => (
+                          <button
+                            key={color}
+                            onClick={() => setPrimaryColor(color)}
+                            className={cn(
+                              "w-8 h-8 rounded-full border-2 transition-all active:scale-90",
+                              primaryColor === color ? "border-primary scale-110 shadow-lg" : "border-transparent"
+                            )}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </nav>
 
               <div className="pt-6 border-t border-outline-variant/10">
@@ -756,7 +836,7 @@ function NavButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
       onClick={onClick}
       className={cn(
         "flex flex-col items-center justify-center gap-1 px-2 sm:px-4 py-2 rounded-2xl transition-all duration-300",
-        active ? "text-primary bg-primary-fixed/30" : "text-on-surface-variant hover:text-primary"
+        active ? "text-primary bg-primary-fixed/30 dark:bg-primary/20" : "text-on-surface-variant hover:text-primary"
       )}
     >
       {icon}
@@ -771,7 +851,7 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
       onClick={onClick}
       className={cn(
         "w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 text-left",
-        active ? "bg-primary-fixed text-on-primary-fixed shadow-sm" : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+        active ? "bg-primary text-white shadow-sm" : "text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high hover:text-on-surface"
       )}
     >
       {icon}
