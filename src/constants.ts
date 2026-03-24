@@ -16,7 +16,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Recente',
     type: 'Chronic',
     localHistory: 'Moçambique tem uma das maiores prevalências de anemia falciforme na África Austral, com programas de rastreio neonatal em expansão.',
-    imageUrl: 'https://images.unsplash.com/photo-1579154712747-4c8000799908?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1631815589968-fdb09a223b1e?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '5',
@@ -88,7 +88,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Atualizado',
     type: 'Infectious',
     localHistory: 'Surtos cíclicos de cólera ocorrem em Moçambique, especialmente durante a época das chuvas e após ciclones, exigindo respostas rápidas de saúde pública.',
-    imageUrl: 'https://images.unsplash.com/photo-1541675154750-0444c7d51e8e?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '3',
@@ -171,7 +171,7 @@ export const DISEASES: Disease[] = [
     type: 'Chronic',
     subtypes: ['Tipo 1', 'Tipo 2', 'Gestacional'],
     localHistory: 'O diagnóstico de diabetes tem aumentado em Moçambique, desafiando o sistema de saúde a fornecer tratamento contínuo e educação para o autocuidado.',
-    imageUrl: 'https://images.unsplash.com/photo-1508847154043-be5407fcaa5a?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '4',
@@ -378,7 +378,7 @@ export const DISEASES: Disease[] = [
     updatedAt: '1h atrás',
     type: 'Infectious',
     localHistory: 'A malária é a principal causa de consultas médicas e internamentos em Moçambique, sendo endêmica em todo o país.',
-    imageUrl: 'https://images.unsplash.com/photo-1603398938378-e54eab446ddd?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '12',
@@ -471,7 +471,7 @@ export const DISEASES: Disease[] = [
     updatedAt: 'Ontem',
     type: 'Infectious',
     localHistory: 'Campanhas de vacinação em massa são frequentes em Moçambique para prevenir surtos de sarampo em crianças.',
-    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1605092676920-8ac5ae40c7c8?q=80&w=1200&auto=format&fit=crop',
   },
   {
     id: '10',

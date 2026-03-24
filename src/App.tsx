@@ -97,16 +97,39 @@ export default function App() {
 
   const recordHistory = async (query: string, type: string = 'search', metadata: any = {}) => {
     if (!session?.user?.id) return;
-    const { error } = await supabase
-      .from('search_history')
-      .insert({
-        user_id: session.user.id,
-        query,
-        type,
-        metadata
-      });
-    if (error) console.error('Error recording history:', error);
-    else fetchHistory();
+    
+    try {
+      // Check if entry already exists to update timestamp instead of creating duplicate
+      const { data: existing } = await supabase
+        .from('search_history')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('query', query)
+        .eq('type', type)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('search_history')
+          .update({ 
+            created_at: new Date().toISOString(),
+            metadata: { ...metadata, updated: true }
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('search_history')
+          .insert({
+            user_id: session.user.id,
+            query,
+            type,
+            metadata
+          });
+      }
+      fetchHistory();
+    } catch (error) {
+      console.error('Error recording history:', error);
+    }
   };
 
   const handleSelectDisease = (d: Disease) => {
@@ -419,7 +442,14 @@ export default function App() {
 
     switch (currentScreen) {
       case 'home':
-        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} profile={profile} recentHistory={recentHistory} />;
+        return <HomeScreen 
+          diseases={diseases} 
+          onNavigate={setCurrentScreen} 
+          onSelectDisease={handleSelectDisease} 
+          onSelectProcedure={handleSelectProcedure}
+          profile={profile} 
+          recentHistory={recentHistory} 
+        />;
       case 'diseases':
         return <DiseasesScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} searchQuery={searchQuery} onSearch={setSearchQuery} />;
       case 'procedures':
@@ -464,7 +494,14 @@ export default function App() {
       case 'login':
         return <LoginScreen onNavigate={setCurrentScreen} onLogin={() => setIsLoggedIn(true)} onRefreshProfile={fetchProfile} />;
       default:
-        return <HomeScreen diseases={diseases} onNavigate={setCurrentScreen} onSelectDisease={handleSelectDisease} profile={profile} recentHistory={recentHistory} />;
+        return <HomeScreen 
+          diseases={diseases} 
+          onNavigate={setCurrentScreen} 
+          onSelectDisease={handleSelectDisease} 
+          onSelectProcedure={handleSelectProcedure}
+          profile={profile} 
+          recentHistory={recentHistory} 
+        />;
     }
   };
 
@@ -715,7 +752,23 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 // --- Screens ---
 
-function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHistory }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, profile: any, recentHistory: any[] }) {
+const formatTimeAgo = (dateString: string) => {
+  if (!dateString) return '';
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffInMs = now.getTime() - past.getTime();
+  const diffInMins = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+  if (diffInMins < 1) return 'agora mesmo';
+  if (diffInMins < 60) return `há ${diffInMins} min`;
+  if (diffInHours < 24) return `há ${diffInHours} ${diffInHours === 1 ? 'hora' : 'horas'}`;
+  if (diffInDays < 30) return `há ${diffInDays} ${diffInDays === 1 ? 'dia' : 'dias'}`;
+  return past.toLocaleDateString('pt-BR');
+};
+
+function HomeScreen({ diseases, onNavigate, onSelectDisease, onSelectProcedure, profile, recentHistory }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, onSelectProcedure: (p: Procedure) => void, profile: any, recentHistory: any[] }) {
   const getGreeting = () => {
     if (!profile) return 'Olá! Seja bem vindo.';
     const firstName = profile.full_name?.split(' ')[0] || '';
@@ -726,11 +779,22 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHist
 
   // Map history items to displayable content
   const historyToDisplay = recentHistory.filter(h => h.type === 'view').map(h => {
+    let item = null;
     if (h.metadata?.category === 'disease') {
-      return diseases.find(d => d.id === h.metadata.id);
+      item = diseases.find(d => d.id === h.metadata.id);
+    } else if (h.metadata?.category === 'procedure') {
+      item = PROCEDURES.find(p => p.id === h.metadata.id);
+    }
+    
+    if (item) {
+      return { 
+        ...item, 
+        historyCreatedAt: h.created_at, 
+        historyCategory: h.metadata?.category 
+      };
     }
     return null;
-  }).filter(Boolean) as Disease[];
+  }).filter(Boolean);
 
   const displayItems = historyToDisplay.length > 0 ? historyToDisplay.slice(0, 3) : diseases.slice(0, 3);
 
@@ -789,23 +853,31 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, profile, recentHist
           <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayItems.map((disease) => (
+          {displayItems.map((item: any) => (
             <div 
-              key={disease.id}
-              onClick={() => onSelectDisease(disease)}
+              key={item.id}
+              onClick={() => {
+                if (item.historyCategory === 'procedure' || ('steps' in item)) {
+                  onSelectProcedure(item);
+                } else {
+                  onSelectDisease(item);
+                }
+              }}
               className="bg-surface-container-lowest p-4 rounded-2xl flex items-center gap-4 relative ambient-shadow cursor-pointer hover:bg-surface-container-low transition-all"
             >
               <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-secondary rounded-full" />
               <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center overflow-hidden">
-                {disease.imageUrl ? (
-                  <img src={disease.imageUrl} alt={disease.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <Activity className="w-6 h-6 text-secondary" />
                 )}
               </div>
               <div className="flex-1">
-                <h4 className="font-bold text-on-surface">{disease.name}</h4>
-                <p className="text-xs text-on-surface-variant font-medium">Protocolo • Atualizado {disease.updatedAt}</p>
+                <h4 className="font-bold text-on-surface">{item.name}</h4>
+                <p className="text-xs text-on-surface-variant font-medium">
+                  {item.historyCategory === 'procedure' || ('steps' in item) ? 'Procedimento' : 'Protocolo'} • {item.historyCreatedAt ? `Visualizado ${formatTimeAgo(item.historyCreatedAt)}` : `Atualizado ${item.updatedAt}`}
+                </p>
               </div>
               <ChevronRight className="w-5 h-5 text-outline-variant" />
             </div>

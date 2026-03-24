@@ -279,7 +279,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     if (disease) {
       disease.id = disease.id || `ai-${Date.now()}`;
       disease.updatedAt = new Date().toISOString();
-      disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},medical`;
+      disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},disease,medical,health`;
     }
     return disease;
   } catch (error) {
