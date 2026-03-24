@@ -458,7 +458,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-surface flex flex-col relative overflow-x-hidden">
       {/* Background Decorations - Lightened */}
       <div className="fixed top-0 right-0 -z-10 w-1/3 h-1/2 bg-gradient-to-bl from-primary-fixed/5 to-transparent blur-3xl opacity-20" />
       <div className="fixed bottom-0 left-0 -z-10 w-1/4 h-1/3 bg-gradient-to-tr from-secondary-container/5 to-transparent blur-3xl opacity-20" />
@@ -530,7 +530,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Top App Bar */}
-      {currentScreen !== 'login' && currentScreen !== 'signup' && (
+      {currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'ai-assistant' && (
         <header className="fixed top-0 left-0 right-0 z-50 glass-effect border-b border-outline-variant/10 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -609,7 +609,7 @@ export default function App() {
             exit="exit"
             variants={pageVariants}
             transition={transition}
-            className="h-full"
+            className={cn("h-full", currentScreen === 'ai-assistant' && "fixed inset-0 z-[60]")}
           >
             {renderScreen()}
           </motion.div>
@@ -856,7 +856,7 @@ function DiseasesScreen({ diseases, onNavigate, onSelectDisease, searchQuery, on
               <div 
                 key={disease.id}
                 onClick={() => onSelectDisease(disease)}
-                className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-surface-container-low transition-all ambient-shadow relative overflow-hidden"
+                className="bg-surface-container-lowest p-5 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-surface-container-low transition-all ambient-shadow relative overflow-hidden transform-gpu"
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary rounded-r-full" />
                 <div className="flex-1 pr-4">
@@ -1140,21 +1140,21 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
   return (
     <div className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32">
       {/* Header Image with Floating Badge */}
-      <section className="relative max-w-4xl mx-auto w-full">
-        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group">
+      <section className="relative max-w-4xl mx-auto w-full isolate">
+        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group will-change-transform transform-gpu">
           <img 
             src={`https://picsum.photos/seed/${disease.name}/1200/600`} 
             alt={disease.name} 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 will-change-transform"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
           
           <div className="absolute top-6 left-6">
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl"
+              className="px-4 py-2 bg-black/20 backdrop-blur-sm border border-white/20 rounded-2xl"
             >
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
                 {typeLabels[disease.type] || disease.type}
@@ -1187,7 +1187,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.05 }}
             className={cn(
-              "group bg-surface-container-lowest p-6 rounded-[2rem] ambient-shadow border border-outline-variant/5 hover:border-primary/20 transition-all duration-300",
+              "group bg-surface-container-lowest p-6 rounded-[2rem] ambient-shadow border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 transform-gpu",
               section.isMedication ? "md:col-span-2 lg:col-span-3" : ""
             )}
           >
@@ -1289,7 +1289,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
         </div>
         
         <div className="relative z-10 text-center">
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-xl rounded-3xl flex items-center justify-center mx-auto mb-6">
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center mx-auto mb-6">
             <ShieldCheck className="w-8 h-8 text-white" />
           </div>
           <h3 className="font-headline text-2xl font-black mb-3 tracking-tight">Protocolo de Segurança</h3>
