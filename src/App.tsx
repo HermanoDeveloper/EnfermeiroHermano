@@ -46,8 +46,13 @@ import {
   Calendar,
   Hash,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Download,
+  FileText,
+  RefreshCw
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { cn } from './lib/utils';
 import { Screen, Disease, Procedure, Medication } from './types';
 import { DISEASES, PROCEDURES } from './constants';
@@ -59,9 +64,20 @@ import { searchDiseaseAI, searchProcedureAI } from './services/gemini';
 
 export default function App() {
   const isDev = import.meta.env.DEV;
-  const [currentScreen, setCurrentScreen] = useState<Screen>(isDev ? 'home' : 'login');
-  const [selectedDisease, setSelectedDisease] = useState<Disease | null>(null);
-  const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+    if (isDev) return 'home';
+    const saved = localStorage.getItem('currentScreen') as Screen;
+    if (saved && saved !== 'login' && saved !== 'signup') return saved;
+    return 'login';
+  });
+  const [selectedDisease, setSelectedDisease] = useState<Disease | null>(() => {
+    const saved = localStorage.getItem('selectedDisease');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [selectedProcedure, setSelectedProcedure] = useState<Procedure | null>(() => {
+    const saved = localStorage.getItem('selectedProcedure');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [isLoggedIn, setIsLoggedIn] = useState(isDev);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -361,9 +377,23 @@ export default function App() {
     if (!isLoggedIn && currentScreen !== 'signup' && currentScreen !== 'login') {
       setCurrentScreen('login');
     } else if (isLoggedIn && (currentScreen === 'login' || currentScreen === 'signup')) {
-      setCurrentScreen('home');
+      const savedScreen = localStorage.getItem('currentScreen') as Screen;
+      if (savedScreen && savedScreen !== 'login' && savedScreen !== 'signup') {
+        setCurrentScreen(savedScreen);
+      } else {
+        setCurrentScreen('home');
+      }
     }
-  }, [isLoggedIn, currentScreen]);
+  }, [isLoggedIn]);
+
+  // Persist state
+  useEffect(() => {
+    localStorage.setItem('currentScreen', currentScreen);
+    if (selectedDisease) localStorage.setItem('selectedDisease', JSON.stringify(selectedDisease));
+    else localStorage.removeItem('selectedDisease');
+    if (selectedProcedure) localStorage.setItem('selectedProcedure', JSON.stringify(selectedProcedure));
+    else localStorage.removeItem('selectedProcedure');
+  }, [currentScreen, selectedDisease, selectedProcedure]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -1189,7 +1219,36 @@ function ProceduresScreen({
 }
 
 function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onBack: () => void }) {
+  const [isDownloading, setIsDownloading] = useState(false);
   if (!disease) return null;
+
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    const element = document.getElementById('disease-content');
+    if (!element) {
+      setIsDownloading(false);
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f5f5f0'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${disease.name.replace(/\s+/g, '_')}_Biblioteca_Saude.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const typeLabels: Record<string, string> = {
     'Chronic': 'Crônica',
@@ -1234,7 +1293,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
   ].filter(s => s.show !== false);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32">
+    <div id="disease-content" className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32 bg-[#f5f5f0]">
       {/* Header Image with Floating Badge */}
       <section className="relative max-w-4xl mx-auto w-full isolate">
         <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group">
@@ -1246,7 +1305,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
           
-          <div className="absolute top-6 left-6">
+          <div className="absolute top-6 left-6 flex items-center gap-2">
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1256,6 +1315,18 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                 {typeLabels[disease.type] || disease.type}
               </span>
             </motion.div>
+            
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownloadPDF();
+              }}
+              disabled={isDownloading}
+              className="p-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all active:scale-95 disabled:opacity-50"
+              title="Baixar PDF"
+            >
+              {isDownloading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            </button>
           </div>
 
           <div className="absolute bottom-8 left-8 right-8">
@@ -1407,7 +1478,36 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
   onEnhanceAI: (p: Procedure) => void,
   isEnhancing: boolean
 }) {
+  const [isDownloading, setIsDownloading] = useState(false);
   if (!procedure) return null;
+
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    const element = document.getElementById('procedure-content');
+    if (!element) {
+      setIsDownloading(false);
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f5f5f0'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${procedure.name.replace(/\s+/g, '_')}_Biblioteca_Saude.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const sections = [
     { title: 'Conceito', content: procedure.concept, icon: Info, show: !!procedure.concept, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -1417,7 +1517,7 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
   ];
 
   return (
-    <div className="flex-1 p-6 space-y-10 pb-32 max-w-4xl mx-auto w-full">
+    <div id="procedure-content" className="flex-1 p-6 space-y-10 pb-32 max-w-4xl mx-auto w-full bg-[#f5f5f0]">
       {/* Header */}
       <header className="flex items-center gap-6">
         <button 
@@ -1426,7 +1526,7 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="px-3 py-1 bg-secondary/10 text-secondary text-[10px] font-black uppercase tracking-widest rounded-full">
               {procedure.category}
@@ -1437,6 +1537,15 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
           </div>
           <h1 className="font-headline text-4xl font-black text-on-surface tracking-tight leading-none">{procedure.name}</h1>
         </div>
+        
+        <button
+          onClick={handleDownloadPDF}
+          disabled={isDownloading}
+          className="w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center active:scale-90 transition-all hover:bg-primary/90 disabled:opacity-50"
+          title="Baixar PDF"
+        >
+          {isDownloading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Download className="w-6 h-6" />}
+        </button>
       </header>
 
       {/* Quick Stats */}
