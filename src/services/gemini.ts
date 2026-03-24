@@ -92,7 +92,7 @@ ${JSON.stringify(currentContext || {})}
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: question,
         config: {
           systemInstruction,
@@ -125,7 +125,7 @@ ${JSON.stringify(currentContext || {})}
       console.warn("AI Search Grounding failed, falling back to standard generation", searchError);
       // Fallback without googleSearch
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: question,
         config: {
           systemInstruction,
@@ -162,6 +162,12 @@ ${JSON.stringify(currentContext || {})}
     };
   } catch (error) {
     console.error("AI Service Error:", error);
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("GEMINI_API_KEY")) {
+      return {
+        text: "O Doutor IA precisa de uma chave de API configurada para funcionar. Por favor, adicione a GEMINI_API_KEY nas configurações do projeto."
+      };
+    }
     return {
       text: "Desculpe, o cérebro do sistema está temporariamente indisponível. Por favor, tente novamente."
     };
@@ -193,7 +199,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
         config: {
           systemInstruction,
@@ -235,7 +241,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     } catch (searchError) {
       console.warn("Disease AI Search Grounding failed, falling back to standard generation", searchError);
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: `Estruture os dados da doença (com base no seu conhecimento): ${diseaseName}`,
         config: {
           systemInstruction,
@@ -308,7 +314,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: `Pesquise na internet e no manual para fornecer os detalhes completos do procedimento: ${procedureName}`,
         config: {
           systemInstruction,
@@ -335,7 +341,7 @@ Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
     } catch (searchError) {
       console.warn("Procedure AI Search Grounding failed, falling back to standard generation", searchError);
       response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: `Forneça os detalhes completos do procedimento (com base no seu conhecimento e manual): ${procedureName}`,
         config: {
           systemInstruction,
