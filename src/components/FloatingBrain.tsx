@@ -152,7 +152,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
             </div>
 
             {/* Content */}
-            <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
+            <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide overscroll-contain">
               {messages.map((message) => (
                 <motion.div 
                   key={message.id}

@@ -108,7 +108,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
   };
 
   return (
-    <div className="flex flex-col h-screen bg-surface">
+    <div className="flex flex-col h-full bg-surface">
       {/* Header */}
       <header className="px-6 py-4 bg-white border-b border-outline-variant/10 flex items-center gap-4 sticky top-0 z-10">
         <button 
@@ -131,7 +131,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
       </header>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
         <div className="max-w-3xl mx-auto space-y-6">
           <AnimatePresence initial={false}>
             {messages.map((message) => (

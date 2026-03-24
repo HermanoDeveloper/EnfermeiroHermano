@@ -342,6 +342,17 @@ export default function App() {
     }
   }, [isLoggedIn, currentScreen]);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    
+    // Manage body overflow for full-screen screens
+    if (currentScreen === 'ai-assistant' || isSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [currentScreen, isSidebarOpen]);
+
   // Animation variants
   const pageVariants = {
     initial: { opacity: 0, y: 10 },
@@ -609,7 +620,9 @@ export default function App() {
             exit="exit"
             variants={pageVariants}
             transition={transition}
-            className={cn("h-full", currentScreen === 'ai-assistant' && "fixed inset-0 z-[60]")}
+            className={cn(
+              currentScreen === 'ai-assistant' ? "fixed inset-0 z-[60] h-full overflow-hidden overscroll-none" : ""
+            )}
           >
             {renderScreen()}
           </motion.div>
@@ -1152,11 +1165,11 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
     <div className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32">
       {/* Header Image with Floating Badge */}
       <section className="relative max-w-4xl mx-auto w-full isolate">
-        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group will-change-transform transform-gpu">
+        <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group">
           <img 
             src={disease.imageUrl || `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},medical`} 
             alt={disease.name} 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 will-change-transform"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
