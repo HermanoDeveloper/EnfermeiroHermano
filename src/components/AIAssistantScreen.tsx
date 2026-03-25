@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info } from 'lucide-react';
+import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info, History, X, Calendar } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { askAI } from '../services/gemini';
 import { cn } from '../lib/utils';
@@ -15,6 +15,12 @@ interface Message {
   suggestions?: string[];
 }
 
+interface ChatSession {
+  id: string;
+  date: Date;
+  messages: Message[];
+}
+
 interface AIAssistantScreenProps {
   onBack: () => void;
   onNavigate?: (screen: Screen) => void;
@@ -23,25 +29,64 @@ interface AIAssistantScreenProps {
 }
 
 export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowProcedure }: AIAssistantScreenProps) {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = localStorage.getItem('hermano_chat_history');
+  const [showHistory, setShowHistory] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('hermano_chat_sessions');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+        return parsed.map((s: any) => ({
+          ...s,
+          date: new Date(s.date),
+          messages: s.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+        }));
+      } catch (e) {
+        console.error("Error parsing chat sessions", e);
+      }
+    }
+    return [];
+  });
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('hermano_chat_history');
+    const lastActive = localStorage.getItem('hermano_chat_last_active');
+    const now = Date.now();
+    const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 minutes
+
+    const defaultGreeting: Message = {
+      id: '1',
+      text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const history = parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+        
+        // Check for inactivity
+        if (lastActive && (now - parseInt(lastActive)) > INACTIVITY_LIMIT) {
+          // Archive old history if it has more than just the greeting
+          if (history.length > 1) {
+            const newSession: ChatSession = {
+              id: Date.now().toString(),
+              date: history[0].timestamp,
+              messages: history
+            };
+            const currentSessions = JSON.parse(localStorage.getItem('hermano_chat_sessions') || '[]');
+            localStorage.setItem('hermano_chat_sessions', JSON.stringify([newSession, ...currentSessions]));
+          }
+          return [defaultGreeting];
+        }
+        return history;
       } catch (e) {
         console.error("Error parsing chat history", e);
       }
     }
-    return [
-      {
-        id: '1',
-        text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
-        sender: 'ai',
-        timestamp: new Date(),
-      },
-    ];
+    return [defaultGreeting];
   });
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,7 +98,34 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
   useEffect(() => {
     scrollToBottom();
     localStorage.setItem('hermano_chat_history', JSON.stringify(messages));
+    localStorage.setItem('hermano_chat_last_active', Date.now().toString());
   }, [messages]);
+
+  const handleClearChat = () => {
+    if (messages.length > 1) {
+      const newSession: ChatSession = {
+        id: Date.now().toString(),
+        date: messages[0].timestamp,
+        messages: messages
+      };
+      const updatedSessions = [newSession, ...sessions];
+      setSessions(updatedSessions);
+      localStorage.setItem('hermano_chat_sessions', JSON.stringify(updatedSessions));
+    }
+
+    const defaultGreeting: Message = {
+      id: Date.now().toString(),
+      text: 'Chat reiniciado. Como posso ajudar você agora?',
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+    setMessages([defaultGreeting]);
+  };
+
+  const handleLoadSession = (session: ChatSession) => {
+    setMessages(session.messages);
+    setShowHistory(false);
+  };
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = typeof overrideInput === 'string' ? overrideInput : input;
@@ -111,7 +183,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface">
+    <div className="flex flex-col h-full bg-surface relative">
       {/* Header */}
       <header className="px-6 py-4 bg-surface border-b border-outline-variant/10 flex items-center gap-4 sticky top-0 z-10">
         <button 
@@ -120,7 +192,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
         >
           <ArrowLeft className="w-6 h-6 text-on-surface" />
         </button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
             <Bot className="w-6 h-6 text-primary" />
           </div>
@@ -131,7 +203,96 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setShowHistory(true)}
+            title="Histórico de conversas"
+            className="p-2 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant"
+          >
+            <History className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={handleClearChat}
+            title="Limpar conversa"
+            className="p-2 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        </div>
       </header>
+
+      {/* History Modal */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="bg-surface w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-outline-variant/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <History className="w-5 h-5 text-primary" />
+                  <h2 className="font-headline font-bold text-lg">Histórico</h2>
+                </div>
+                <button 
+                  onClick={() => setShowHistory(false)}
+                  className="p-2 rounded-full hover:bg-surface-container-low transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {sessions.length === 0 ? (
+                  <div className="text-center py-12 text-on-surface-variant">
+                    <p className="text-sm italic">Nenhum histórico salvo ainda.</p>
+                  </div>
+                ) : (
+                  sessions.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => handleLoadSession(session)}
+                      className="w-full p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/30 transition-all text-left group"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs font-medium text-primary">
+                          <Calendar className="w-3 h-3" />
+                          {session.date.toLocaleDateString()} {session.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <span className="text-[10px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                          {session.messages.length} mensagens
+                        </span>
+                      </div>
+                      <p className="text-sm text-on-surface line-clamp-2 opacity-80 group-hover:opacity-100">
+                        {session.messages.find(m => m.sender === 'user')?.text || 'Conversa iniciada'}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+              
+              <div className="p-4 bg-surface-container-low border-t border-outline-variant/10">
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('hermano_chat_sessions');
+                    setSessions([]);
+                  }}
+                  className="w-full py-3 text-sm font-medium text-error hover:bg-error/5 rounded-xl transition-colors"
+                >
+                  Limpar todo o histórico
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
