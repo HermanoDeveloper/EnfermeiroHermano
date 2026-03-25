@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bot, X, Send, Sparkles, Command, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -123,119 +124,122 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
 
   return (
     <div className="relative flex flex-col items-center">
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop Overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[99]"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90vw] max-w-[400px] bg-white rounded-3xl shadow-2xl border border-primary/10 overflow-hidden z-[100]"
-            >
-            {/* Header */}
-            <div className="bg-primary p-4 flex items-center justify-between text-white">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                <span className="font-headline font-bold">Doutor IA</span>
-              </div>
-              <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <>
+              {/* Backdrop Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsOpen(false)}
+                className="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-sm z-[999]"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90vw] max-w-[400px] bg-surface dark:bg-surface-container shadow-2xl border border-primary/10 rounded-3xl overflow-hidden z-[1000]"
+              >
+                {/* Header */}
+                <div className="bg-primary p-4 flex items-center justify-between text-on-primary">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5" />
+                    <span className="font-headline font-bold">Doutor IA</span>
+                  </div>
+                  <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-            {/* Content */}
-            <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide overscroll-contain">
-              {messages.map((message) => (
-                <motion.div 
-                  key={message.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    "flex flex-col gap-1",
-                    message.sender === 'user' ? "items-end" : "items-start"
-                  )}
-                >
-                  <div className={cn(
-                    "p-3 rounded-2xl text-sm max-w-[90%]",
-                    message.sender === 'user' 
-                      ? "bg-secondary text-white rounded-tr-none" 
-                      : "bg-surface-container-low border border-outline-variant/20 text-on-surface rounded-tl-none"
-                  )}>
-                    <div className="flex items-start gap-2">
-                      {message.sender === 'ai' && <Bot className="w-4 h-4 text-primary shrink-0 mt-0.5" />}
-                      <div className="space-y-2 markdown-body">
-                        <div className="leading-relaxed">
-                          <ReactMarkdown>{message.text}</ReactMarkdown>
-                        </div>
-                        {message.suggestions && message.suggestions.length > 0 && (
-                          <div className="flex flex-wrap gap-2 pt-2">
-                            {message.suggestions.map((suggestion, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleSend(suggestion)}
-                                className="text-[10px] bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 px-2.5 py-1.5 rounded-full transition-colors text-left font-medium"
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
+                {/* Content */}
+                <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide overscroll-contain bg-surface dark:bg-surface-container">
+                  {messages.map((message) => (
+                    <motion.div 
+                      key={message.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cn(
+                        "flex flex-col gap-1",
+                        message.sender === 'user' ? "items-end" : "items-start"
+                      )}
+                    >
+                      <div className={cn(
+                        "p-3 rounded-2xl text-sm max-w-[90%]",
+                        message.sender === 'user' 
+                          ? "bg-secondary text-white rounded-tr-none" 
+                          : "bg-surface-container-low border border-outline-variant/20 text-on-surface rounded-tl-none"
+                      )}>
+                        <div className="flex items-start gap-2">
+                          {message.sender === 'ai' && <Bot className="w-4 h-4 text-primary shrink-0 mt-0.5" />}
+                          <div className="space-y-2 markdown-body">
+                            <div className="leading-relaxed">
+                              <ReactMarkdown>{message.text}</ReactMarkdown>
+                            </div>
+                            {message.suggestions && message.suggestions.length > 0 && (
+                              <div className="flex flex-wrap gap-2 pt-2">
+                                {message.suggestions.map((suggestion, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleSend(suggestion)}
+                                    className="text-[10px] bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 px-2.5 py-1.5 rounded-full transition-colors text-left font-medium"
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant/60 px-1">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </motion.div>
+                  ))}
+
+                  {isLoading && (
+                    <div className="flex justify-start py-2">
+                      <div className="bg-surface-container-low p-3 rounded-2xl rounded-tl-none border border-outline-variant/20">
+                        <div className="flex gap-1">
+                          <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
+                          <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]" />
+                          <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.4s]" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <span className="text-[9px] text-on-surface-variant/60 px-1">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </motion.div>
-              ))}
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
 
-              {isLoading && (
-                <div className="flex justify-start py-2">
-                  <div className="bg-surface-container-low p-3 rounded-2xl rounded-tl-none border border-outline-variant/20">
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
-                      <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.4s]" />
-                    </div>
+                {/* Input */}
+                <div className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest dark:bg-surface-container-high">
+                  <div className="relative">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                      placeholder="Comande o site..."
+                      className="w-full bg-surface dark:bg-surface-container-lowest border border-outline-variant/30 rounded-2xl py-3 pl-4 pr-12 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      onClick={() => handleSend()}
+                      disabled={!input.trim() || isLoading}
+                      className="absolute right-1.5 top-1.5 p-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <div className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest">
-              <div className="relative">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Comande o site..."
-                  className="w-full bg-white border border-outline-variant/30 rounded-2xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={() => handleSend()}
-                  disabled={!input.trim() || isLoading}
-                  className="absolute right-1.5 top-1.5 p-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
-      </AnimatePresence>
 
       {/* Toggle Button (Navbar Style) */}
       <button 

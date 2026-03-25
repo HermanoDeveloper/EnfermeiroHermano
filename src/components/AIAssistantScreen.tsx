@@ -94,10 +94,13 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
           onShowProcedure(response.command.params);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('AI Assistant Error:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Desculpe, o cérebro do sistema encontrou um erro ao processar sua solicitação.',
+        text: error?.message?.includes('GEMINI_API_KEY') 
+          ? 'Erro de Configuração: A chave da IA (GEMINI_API_KEY) não foi encontrada no ambiente de deploy. Por favor, verifique as variáveis de ambiente.'
+          : 'Desculpe, o Hermano encontrou um erro ao processar sua solicitação. Por favor, tente novamente em alguns instantes.',
         sender: 'ai',
         timestamp: new Date(),
       };
@@ -110,7 +113,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
-      <header className="px-6 py-4 bg-white border-b border-outline-variant/10 flex items-center gap-4 sticky top-0 z-10">
+      <header className="px-6 py-4 bg-surface border-b border-outline-variant/10 flex items-center gap-4 sticky top-0 z-10">
         <button 
           onClick={onBack}
           className="p-2 rounded-full hover:bg-surface-container-low transition-colors"
@@ -154,7 +157,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
                   "p-4 rounded-2xl shadow-sm",
                   message.sender === 'user' 
                     ? "bg-secondary text-white rounded-tr-none" 
-                    : "bg-white border border-outline-variant/20 text-on-surface rounded-tl-none"
+                    : "bg-surface-container-low border border-outline-variant/20 text-on-surface rounded-tl-none"
                 )}>
                   <div className="text-sm leading-relaxed whitespace-pre-wrap markdown-body">
                     <ReactMarkdown>{message.text}</ReactMarkdown>
@@ -192,7 +195,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
               <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center">
                 <Bot className="w-5 h-5" />
               </div>
-              <div className="bg-white border border-outline-variant/20 p-4 rounded-2xl rounded-tl-none shadow-sm">
+              <div className="bg-surface-container-low border border-outline-variant/20 p-4 rounded-2xl rounded-tl-none shadow-sm">
                 <div className="flex gap-1">
                   <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" />
                   <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]" />
@@ -206,7 +209,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
       </div>
 
       {/* Input Area */}
-      <div className="p-6 bg-white border-t border-outline-variant/10">
+      <div className="p-6 bg-surface border-t border-outline-variant/10">
         <div className="max-w-3xl mx-auto">
           <div className="relative flex items-center gap-2">
             <input

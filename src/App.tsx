@@ -173,7 +173,12 @@ export default function App() {
       try {
         const result = await searchDiseaseAI(searchQuery);
         if (result) {
+          setDiseases(prev => {
+            if (prev.find(d => d.id === result.id)) return prev;
+            return [result, ...prev];
+          });
           setSelectedDisease(result);
+          recordHistory(result.name, 'view', { id: result.id, category: 'disease' });
           setCurrentScreen('disease-detail');
         }
       } catch (error) {
@@ -186,7 +191,12 @@ export default function App() {
       try {
         const result = await searchProcedureAI(searchQuery);
         if (result) {
+          setProcedures(prev => {
+            if (prev.find(p => p.id === result.id)) return prev;
+            return [result, ...prev];
+          });
           setSelectedProcedure(result);
+          recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
           setCurrentScreen('procedure-detail');
         }
       } catch (error) {
@@ -219,15 +229,22 @@ export default function App() {
     try {
       const result = await searchProcedureAI(procedure.name);
       if (result) {
+        setProcedures(prev => {
+          if (prev.find(p => p.id === result.id)) return prev;
+          return [result, ...prev];
+        });
         setSelectedProcedure(result);
+        recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
       } else {
         // Fallback to local data if AI fails
         setSelectedProcedure(procedure);
+        recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
       }
       setCurrentScreen('procedure-detail');
     } catch (error) {
       console.error("Select Procedure AI failed", error);
       setSelectedProcedure(procedure);
+      recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
       setCurrentScreen('procedure-detail');
     } finally {
       setIsSelectingProcedureAI(null);
@@ -480,7 +497,7 @@ export default function App() {
     if (configError && !isDev) {
       return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-surface">
-          <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-error/10 text-center">
+          <div className="max-w-md w-full bg-surface p-8 rounded-3xl shadow-xl border border-error/10 text-center">
             <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-8 h-8 text-error" />
             </div>
@@ -508,6 +525,7 @@ export default function App() {
       case 'home':
         return <HomeScreen 
           diseases={diseases} 
+          procedures={procedures}
           onNavigate={setCurrentScreen} 
           onSelectDisease={handleSelectDisease} 
           onSelectProcedure={handleSelectProcedure}
@@ -519,10 +537,10 @@ export default function App() {
       case 'procedures':
         return (
           <ProceduresScreen 
+            procedures={procedures}
             onNavigate={setCurrentScreen} 
             onSelectProcedure={async (p) => {
               await handleSelectProcedureWithAI(p);
-              recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
             }}
             searchQuery={searchQuery}
             onSearch={setSearchQuery}
@@ -549,8 +567,24 @@ export default function App() {
           <AIAssistantScreen 
             onBack={() => setCurrentScreen('home')} 
             onNavigate={setCurrentScreen} 
-            onShowDisease={(d) => { setSelectedDisease(d); setCurrentScreen('disease-detail'); }}
-            onShowProcedure={(p) => { setSelectedProcedure(p); setCurrentScreen('procedure-detail'); }}
+            onShowDisease={(d) => { 
+              setDiseases(prev => {
+                if (prev.find(item => item.id === d.id)) return prev;
+                return [d, ...prev];
+              });
+              setSelectedDisease(d); 
+              recordHistory(d.name, 'view', { id: d.id, category: 'disease' });
+              setCurrentScreen('disease-detail'); 
+            }}
+            onShowProcedure={(p) => { 
+              setProcedures(prev => {
+                if (prev.find(item => item.id === p.id)) return prev;
+                return [p, ...prev];
+              });
+              setSelectedProcedure(p); 
+              recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
+              setCurrentScreen('procedure-detail'); 
+            }}
           />
         );
       case 'signup':
@@ -560,6 +594,7 @@ export default function App() {
       default:
         return <HomeScreen 
           diseases={diseases} 
+          procedures={procedures}
           onNavigate={setCurrentScreen} 
           onSelectDisease={handleSelectDisease} 
           onSelectProcedure={handleSelectProcedure}
@@ -603,7 +638,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-4 p-4 bg-surface-container-low dark:bg-surface-container-high rounded-2xl">
-                <div className="w-12 h-12 rounded-full bg-primary-fixed overflow-hidden">
+                <div className="w-12 h-12 rounded-full bg-primary-fixed overflow-hidden border-2 border-primary/20">
                   <img 
                     src={profile?.avatar_url || "https://picsum.photos/seed/doctor/200"} 
                     alt={profile?.full_name || "Usuário"} 
@@ -611,10 +646,12 @@ export default function App() {
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <div>
-                  <p className="font-bold text-on-surface">{profile?.full_name || "Usuário"}</p>
-                  <p className="text-xs text-on-surface-variant">
-                    {CATEGORIES.find(c => c.id === profile?.category)?.label || "Profissional de Saúde"}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-on-surface truncate">
+                    {getAbbreviation(profile?.category, profile?.gender)} {profile?.full_name || "Usuário"}
+                  </p>
+                  <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider truncate">
+                    {getProfessionalTitle(profile?.category, profile?.gender, profile?.other_category)}
                   </p>
                 </div>
               </div>
@@ -878,35 +915,37 @@ const formatTimeAgo = (dateString: string) => {
   return past.toLocaleDateString('pt-BR');
 };
 
-function HomeScreen({ diseases, onNavigate, onSelectDisease, onSelectProcedure, profile, recentHistory }: { diseases: Disease[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, onSelectProcedure: (p: Procedure) => void, profile: any, recentHistory: any[] }) {
+function HomeScreen({ diseases, procedures, onNavigate, onSelectDisease, onSelectProcedure, profile, recentHistory }: { diseases: Disease[], procedures: Procedure[], onNavigate: (s: Screen) => void, onSelectDisease: (d: Disease) => void, onSelectProcedure: (p: Procedure) => void, profile: any, recentHistory: any[] }) {
   const getGreeting = () => {
     if (!profile) return 'Olá! Seja bem vindo.';
     const firstName = profile.full_name?.split(' ')[0] || '';
-    const categoryObj = CATEGORIES.find(c => c.id === profile.category);
-    const abbreviation = categoryObj?.abbreviation ? `${categoryObj.abbreviation} ` : '';
-    return `Olá, ${abbreviation}${firstName}! Seja bem vindo.`;
+    const abbreviation = getAbbreviation(profile.category, profile.gender);
+    const prefix = abbreviation ? `${abbreviation} ` : '';
+    return `Olá, ${prefix}${firstName}! Seja bem vindo.`;
   };
 
   // Map history items to displayable content
-  const historyToDisplay = recentHistory.filter(h => h.type === 'view').map(h => {
-    let item = null;
-    if (h.metadata?.category === 'disease') {
-      item = diseases.find(d => d.id === h.metadata.id);
-    } else if (h.metadata?.category === 'procedure') {
-      item = PROCEDURES.find(p => p.id === h.metadata.id);
-    }
-    
-    if (item) {
-      return { 
-        ...item, 
-        historyCreatedAt: h.created_at, 
-        historyCategory: h.metadata?.category 
-      };
-    }
-    return null;
-  }).filter(Boolean);
-
-  const displayItems = historyToDisplay.length > 0 ? historyToDisplay.slice(0, 3) : diseases.slice(0, 3);
+  const historyToDisplay = recentHistory
+    .filter(h => h.type === 'view')
+    .map(h => {
+      let item = null;
+      if (h.metadata?.category === 'disease') {
+        item = diseases.find(d => d.id === h.metadata.id);
+      } else if (h.metadata?.category === 'procedure') {
+        item = procedures.find(p => p.id === h.metadata.id);
+      }
+      
+      if (item) {
+        return { 
+          ...item, 
+          historyCreatedAt: h.created_at, 
+          historyCategory: h.metadata?.category 
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-4 space-y-10">
@@ -916,7 +955,10 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, onSelectProcedure, 
       </div>
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="col-span-2 bg-gradient-to-br from-primary-fixed to-secondary-fixed p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+        <div 
+          onClick={() => onNavigate('diseases')}
+          className="col-span-2 bg-gradient-to-br from-primary-fixed to-secondary-fixed p-6 rounded-3xl ambient-shadow relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all"
+        >
           <div className="relative z-10">
             <Activity className="w-8 h-8 text-on-primary-fixed mb-4" />
             <h3 className="font-headline text-xl font-bold text-on-primary-fixed">Busca Rápida de Doenças</h3>
@@ -929,7 +971,7 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, onSelectProcedure, 
           onClick={() => onNavigate('ai-assistant')}
           className="col-span-2 bg-primary-fixed p-5 rounded-3xl flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all ambient-shadow"
         >
-          <div className="w-12 h-12 rounded-2xl bg-white/50 flex items-center justify-center shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-on-primary-fixed/10 flex items-center justify-center shadow-sm">
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1">
@@ -943,57 +985,59 @@ function HomeScreen({ diseases, onNavigate, onSelectDisease, onSelectProcedure, 
           onClick={() => onNavigate('procedures')}
           className="col-span-2 md:col-span-1 bg-secondary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all"
         >
-          <div className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-on-secondary-fixed/10 flex items-center justify-center shadow-sm">
             <Stethoscope className="w-6 h-6 text-on-secondary-fixed" />
           </div>
           <h3 className="font-headline font-bold text-on-secondary-fixed">Procedimentos de Enfermagem</h3>
         </div>
 
         <div className="col-span-2 md:col-span-1 bg-tertiary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all">
-          <div className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-on-tertiary-fixed/10 flex items-center justify-center shadow-sm">
             <Bell className="w-6 h-6 text-on-tertiary-fixed" />
           </div>
           <h3 className="font-headline font-bold text-on-tertiary-fixed">Últimas Atualizações</h3>
         </div>
       </section>
 
-      <section>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-headline text-xl font-bold text-on-surface">Visualizados Recentemente</h2>
-          <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayItems.map((item: any) => (
-            <div 
-              key={item.id}
-              onClick={() => {
-                if (item.historyCategory === 'procedure' || ('steps' in item)) {
-                  onSelectProcedure(item);
-                } else {
-                  onSelectDisease(item);
-                }
-              }}
-              className="bg-surface-container-lowest p-4 rounded-2xl flex items-center gap-4 relative ambient-shadow cursor-pointer hover:bg-surface-container-low transition-all"
-            >
-              <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-secondary rounded-full" />
-              <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center overflow-hidden">
-                {item.imageUrl ? (
-                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <Activity className="w-6 h-6 text-secondary" />
-                )}
+      {historyToDisplay.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-headline text-xl font-bold text-on-surface">Visualizados Recentemente</h2>
+            <button onClick={() => onNavigate('diseases')} className="text-primary font-bold text-sm">Ver tudo</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {historyToDisplay.map((item: any) => (
+              <div 
+                key={item.id}
+                onClick={() => {
+                  if (item.historyCategory === 'procedure' || ('steps' in item)) {
+                    onSelectProcedure(item);
+                  } else {
+                    onSelectDisease(item);
+                  }
+                }}
+                className="bg-surface-container-lowest p-4 rounded-2xl flex items-center gap-4 relative ambient-shadow cursor-pointer hover:bg-surface-container-low transition-all"
+              >
+                <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-secondary rounded-full" />
+                <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center overflow-hidden">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Activity className="w-6 h-6 text-secondary" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-on-surface">{item.name}</h4>
+                  <p className="text-xs text-on-surface-variant font-medium">
+                    {item.historyCategory === 'procedure' || ('steps' in item) ? 'Procedimento' : 'Protocolo'} • {item.historyCreatedAt ? `Visualizado ${formatTimeAgo(item.historyCreatedAt)}` : `Atualizado ${item.updatedAt}`}
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-outline-variant" />
               </div>
-              <div className="flex-1">
-                <h4 className="font-bold text-on-surface">{item.name}</h4>
-                <p className="text-xs text-on-surface-variant font-medium">
-                  {item.historyCategory === 'procedure' || ('steps' in item) ? 'Procedimento' : 'Protocolo'} • {item.historyCreatedAt ? `Visualizado ${formatTimeAgo(item.historyCreatedAt)}` : `Atualizado ${item.updatedAt}`}
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-outline-variant" />
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="p-8 rounded-3xl bg-surface-container-low text-center border border-outline-variant/10 max-w-2xl mx-auto">
         <div className="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1100,6 +1144,7 @@ function DiseasesScreen({ diseases, onNavigate, onSelectDisease, searchQuery, on
 }
 
 function ProceduresScreen({ 
+  procedures,
   onNavigate, 
   onSelectProcedure,
   searchQuery,
@@ -1108,6 +1153,7 @@ function ProceduresScreen({
   isSearchingAI,
   isSelectingAI
 }: { 
+  procedures: Procedure[],
   onNavigate: (s: Screen) => void, 
   onSelectProcedure: (p: Procedure) => void,
   searchQuery: string,
@@ -1118,7 +1164,7 @@ function ProceduresScreen({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const filteredProcedures = DETAILED_PROCEDURES.filter(p => 
+  const filteredProcedures = procedures.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -1244,13 +1290,13 @@ function ProceduresScreen({
                         </div>
 
                         {proc.observations && proc.observations.length > 0 && (
-                          <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm">
-                            <h5 className="text-xs font-bold uppercase tracking-widest text-amber-700 flex items-center gap-2 mb-2">
+                          <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-sm">
+                            <h5 className="text-xs font-bold uppercase tracking-widest text-amber-600 flex items-center gap-2 mb-2">
                               <AlertCircle className="w-3 h-3" /> Observações Críticas
                             </h5>
                             <ul className="space-y-2">
                               {proc.observations.map((obs, idx) => (
-                                <li key={idx} className="text-xs text-amber-900 font-medium leading-relaxed flex gap-2">
+                                <li key={idx} className="text-xs text-on-surface-variant font-medium leading-relaxed flex gap-2">
                                   <span className="text-amber-500">•</span>
                                   {obs}
                                 </li>
@@ -1314,14 +1360,33 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#f5f5f0'
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
       });
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
       pdf.save(`${disease.name.replace(/\s+/g, '_')}_Biblioteca_Saude.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -1337,13 +1402,13 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
   };
 
   const sections = [
-    { label: 'Descrição', content: disease.description, icon: <Info className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: 'Descrição', content: disease.description, icon: <Info className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { 
       label: 'Contexto Local (Moçambique)', 
       content: disease.localHistory || null, 
       icon: <MapPin className="w-5 h-5" />, 
       color: 'text-orange-600', 
-      bg: 'bg-orange-50',
+      bg: 'bg-orange-500/10',
       show: !!disease.localHistory 
     },
     { 
@@ -1351,29 +1416,29 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       content: disease.subtypes || null, 
       icon: <Layers className="w-5 h-5" />, 
       color: 'text-cyan-500', 
-      bg: 'bg-cyan-50',
+      bg: 'bg-cyan-500/10',
       show: !!disease.subtypes 
     },
-    { label: 'Sintomas', content: disease.symptoms, icon: <Activity className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
-    { label: 'Causas', content: disease.causes, icon: <Microscope className="w-5 h-5" />, color: 'text-purple-500', bg: 'bg-purple-50' },
-    { label: 'Diagnóstico', content: disease.diagnosis, icon: <Stethoscope className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'Tratamento', content: disease.treatment, icon: <Activity className="w-5 h-5" />, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { label: 'Sintomas', content: disease.symptoms, icon: <Activity className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { label: 'Causas', content: disease.causes, icon: <Microscope className="w-5 h-5" />, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    { label: 'Diagnóstico', content: disease.diagnosis, icon: <Stethoscope className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { label: 'Tratamento', content: disease.treatment, icon: <Activity className="w-5 h-5" />, color: 'text-rose-500', bg: 'bg-rose-500/10' },
     { 
       label: 'Medicamentos', 
       content: disease.medications || null, 
       icon: <Pill className="w-5 h-5" />, 
       color: 'text-pink-500', 
-      bg: 'bg-pink-50',
+      bg: 'bg-pink-500/10',
       isMedication: true,
       show: true 
     },
-    { label: 'Complicações', content: disease.complications, icon: <AlertTriangle className="w-5 h-5" />, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: 'Cuidados de enfermagem', content: disease.nursingCare, icon: <HeartPulse className="w-5 h-5" />, color: 'text-indigo-500', bg: 'bg-indigo-50' },
-    { label: 'Prevenção', content: disease.prevention, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-teal-500', bg: 'bg-teal-50' },
+    { label: 'Complicações', content: disease.complications, icon: <AlertTriangle className="w-5 h-5" />, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+    { label: 'Cuidados de enfermagem', content: disease.nursingCare, icon: <HeartPulse className="w-5 h-5" />, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+    { label: 'Prevenção', content: disease.prevention, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-teal-500', bg: 'bg-teal-500/10' },
   ].filter(s => s.show !== false);
 
   return (
-    <div id="disease-content" className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32 bg-[#f5f5f0]">
+    <div id="disease-content" className="max-w-7xl mx-auto px-6 py-4 space-y-8 pb-32 bg-surface">
       {/* Header Image with Floating Badge */}
       <section className="relative max-w-4xl mx-auto w-full isolate">
         <div className="relative overflow-hidden rounded-[2.5rem] aspect-[16/10] md:aspect-[21/9] ambient-shadow group">
@@ -1402,6 +1467,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                 handleDownloadPDF();
               }}
               disabled={isDownloading}
+              data-html2canvas-ignore
               className="p-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all active:scale-95 disabled:opacity-50"
               title="Baixar PDF"
             >
@@ -1529,21 +1595,25 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       <motion.section 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-primary p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden max-w-2xl mx-auto"
+        className="bg-primary p-10 rounded-[3rem] text-on-primary shadow-2xl relative overflow-hidden max-w-2xl mx-auto"
       >
         <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
           <ShieldCheck className="w-64 h-64" />
         </div>
         
         <div className="relative z-10 text-center">
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <ShieldCheck className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 bg-on-primary/20 backdrop-blur-md rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <ShieldCheck className="w-8 h-8 text-on-primary" />
           </div>
           <h3 className="font-headline text-2xl font-black mb-3 tracking-tight">Protocolo de Segurança</h3>
-          <p className="text-white/70 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
+          <p className="text-on-primary/70 text-sm mb-8 max-w-[280px] mx-auto leading-relaxed">
             Este guia segue rigorosamente as diretrizes da OMS e do Ministério da Saúde.
           </p>
-          <button className="w-full py-5 bg-white text-primary font-black rounded-2xl text-xs uppercase tracking-[0.2em] active:scale-95 transition-all shadow-xl hover:shadow-white/10">
+          <button 
+            onClick={handleDownloadPDF}
+            data-html2canvas-ignore
+            className="w-full py-5 bg-on-primary text-primary font-black rounded-2xl text-xs uppercase tracking-[0.2em] active:scale-95 transition-all shadow-xl hover:shadow-on-primary/10"
+          >
             Baixar PDF Completo
           </button>
         </div>
@@ -1573,14 +1643,33 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#f5f5f0'
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
       });
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
       pdf.save(`${procedure.name.replace(/\s+/g, '_')}_Biblioteca_Saude.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -1590,19 +1679,20 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
   };
 
   const sections = [
-    { title: 'Conceito', content: procedure.concept, icon: Info, show: !!procedure.concept, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Materiais Necessários', content: procedure.materials, icon: ShieldCheck, show: !!procedure.materials?.length, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Etapas do Procedimento', content: procedure.procedureSteps, icon: Activity, show: !!procedure.procedureSteps?.length, isSteps: true, color: 'text-primary', bg: 'bg-primary/5' },
-    { title: 'Observações Importantes', content: procedure.observations, icon: AlertCircle, show: !!procedure.observations?.length, isObservations: true, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+    { title: 'Conceito', content: procedure.concept, icon: Info, show: !!procedure.concept, color: 'text-blue-600', bg: 'bg-blue-500/10' },
+    { title: 'Materiais Necessários', content: procedure.materials, icon: ShieldCheck, show: !!procedure.materials?.length, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+    { title: 'Etapas do Procedimento', content: procedure.procedureSteps, icon: Activity, show: !!procedure.procedureSteps?.length, isSteps: true, color: 'text-primary', bg: 'bg-primary/10' },
+    { title: 'Observações Importantes', content: procedure.observations, icon: AlertCircle, show: !!procedure.observations?.length, isObservations: true, color: 'text-amber-700', bg: 'bg-amber-500/10', border: 'border-amber-200/50' },
   ];
 
   return (
-    <div id="procedure-content" className="flex-1 p-6 space-y-10 pb-32 max-w-4xl mx-auto w-full bg-[#f5f5f0]">
+    <div id="procedure-content" className="flex-1 p-6 space-y-10 pb-32 max-w-4xl mx-auto w-full bg-surface">
       {/* Header */}
       <header className="flex items-center gap-6">
         <button 
           onClick={onBack}
-          className="w-14 h-14 rounded-full bg-white shadow-lg flex items-center justify-center text-on-surface active:scale-90 transition-all hover:bg-surface-container-low"
+          data-html2canvas-ignore
+          className="w-14 h-14 rounded-full bg-surface-container-high shadow-lg flex items-center justify-center text-on-surface active:scale-90 transition-all hover:bg-surface-container-low"
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
@@ -1621,7 +1711,8 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
         <button
           onClick={handleDownloadPDF}
           disabled={isDownloading}
-          className="w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center active:scale-90 transition-all hover:bg-primary/90 disabled:opacity-50"
+          data-html2canvas-ignore
+          className="w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg flex items-center justify-center active:scale-90 transition-all hover:bg-primary/90 disabled:opacity-50"
           title="Baixar PDF"
         >
           {isDownloading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Download className="w-6 h-6" />}
@@ -1630,7 +1721,7 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
+        <div className="bg-surface-container-low p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
             <Activity className="w-6 h-6" />
           </div>
@@ -1639,7 +1730,7 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
             <p className="text-sm font-black text-on-surface">{procedure.steps} Passos</p>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
+        <div className="bg-surface-container-low p-6 rounded-[2.5rem] shadow-sm border border-outline-variant/10 flex items-center gap-4">
           <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary">
             <Clock className="w-6 h-6" />
           </div>
@@ -1659,8 +1750,8 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
             className={cn(
-              "bg-white rounded-[3rem] p-8 shadow-sm border border-outline-variant/5 relative overflow-hidden",
-              section.isObservations && "bg-amber-50/50 border-amber-200"
+              "bg-surface-container-low rounded-[3rem] p-8 shadow-sm border border-outline-variant/5 relative overflow-hidden",
+              section.isObservations && "bg-amber-500/5 border-amber-200/30"
             )}
           >
             <div className="flex gap-6">
@@ -1684,7 +1775,7 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
                     <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-primary/10" />
                     {section.content.map((step, i) => (
                       <div key={i} className="flex gap-6 relative">
-                        <div className="w-8 h-8 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 z-10">
+                        <div className="w-8 h-8 rounded-full bg-primary text-on-primary text-xs font-black flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 z-10">
                           {i + 1}
                         </div>
                         <p className="text-on-surface-variant leading-relaxed text-sm font-medium pt-1">
@@ -1696,9 +1787,9 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
                 ) : section.isObservations && Array.isArray(section.content) ? (
                   <ul className="space-y-3">
                     {section.content.map((obs, i) => (
-                      <li key={i} className="flex gap-3 p-4 bg-white rounded-2xl border border-amber-100 shadow-sm">
+                      <li key={i} className="flex gap-3 p-4 bg-surface-container-highest rounded-2xl border border-amber-500/20 shadow-sm">
                         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                        <p className="text-amber-900 text-sm font-semibold leading-relaxed">
+                        <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
                           {obs}
                         </p>
                       </li>
@@ -1762,6 +1853,41 @@ const CATEGORIES = [
   { id: 'non-professional', label: 'Não sou profissional de saúde', abbreviation: '' },
   { id: 'other', label: 'Outro (especificar)', abbreviation: '' },
 ];
+
+const getProfessionalTitle = (category: string | undefined, gender: string | undefined, otherCategory?: string) => {
+  if (!category) return 'Profissional';
+  const cat = CATEGORIES.find(c => c.id === category);
+  if (!cat) return 'Profissional';
+  
+  if (category === 'other' && otherCategory) return otherCategory;
+  if (category === 'non-professional') return cat.label;
+
+  const isFemale = gender === 'Feminino';
+  
+  switch (category) {
+    case 'doctor':
+      return isFemale ? 'Doutora' : 'Doutor';
+    case 'nurse':
+      return isFemale ? 'Enfermeira' : 'Enfermeiro';
+    case 'technician':
+      return isFemale ? 'Técnica de Enfermagem' : 'Técnico de Enfermagem';
+    case 'general-medicine-tech':
+      return isFemale ? 'Técnica de Medicina Geral' : 'Técnico de Medicina Geral';
+    case 'lab-tech':
+      return isFemale ? 'Técnica de Laboratório' : 'Técnico de Laboratório';
+    case 'pharmacist':
+      return isFemale ? 'Farmacêutica' : 'Farmacêutico';
+    default:
+      return cat.label;
+  }
+};
+
+const getAbbreviation = (category: string | undefined, gender: string | undefined) => {
+  if (!category) return '';
+  if (category === 'doctor') return gender === 'Feminino' ? 'Dra.' : 'Dr.';
+  const cat = CATEGORIES.find(c => c.id === category);
+  return cat?.abbreviation || '';
+};
 
 const MONTHS = [
   { value: '1', label: 'Janeiro' },
@@ -2594,10 +2720,11 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
           </div>
         ) : (
           <>
-            <h2 className="font-headline text-3xl font-black text-on-surface tracking-tight">{profile?.full_name || 'Carregando...'}</h2>
+            <h2 className="font-headline text-3xl font-black text-on-surface tracking-tight">
+              {getAbbreviation(profile?.category, profile?.gender)} {profile?.full_name || 'Carregando...'}
+            </h2>
             <p className="text-primary font-bold uppercase tracking-[0.2em] text-xs mt-2">
-              {CATEGORIES.find(c => c.id === profile?.category)?.label || 'Profissional'} 
-              {profile?.other_category ? ` (${profile.other_category})` : ''}
+              {getProfessionalTitle(profile?.category, profile?.gender, profile?.other_category)}
             </p>
           </>
         )}

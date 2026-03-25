@@ -6,6 +6,19 @@ export interface Medication {
   contraindications: string;
 }
 
+export interface Profile {
+  id: string;
+  full_name: string;
+  email?: string;
+  avatar_url?: string;
+  gender?: string;
+  phone?: string;
+  address?: string;
+  birth_date?: string;
+  category?: string;
+  other_category?: string;
+}
+
 export interface Disease {
   id: string;
   name: string;

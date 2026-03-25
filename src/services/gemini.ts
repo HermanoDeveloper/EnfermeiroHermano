@@ -8,9 +8,15 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Vite replaces process.env.GEMINI_API_KEY during build if defined in vite.config.ts
+    // We also check import.meta.env as a fallback for standard Vite behavior
+    const apiKey = 
+      process.env.GEMINI_API_KEY || 
+      import.meta.env.VITE_GEMINI_API_KEY || 
+      import.meta.env.GEMINI_API_KEY;
+
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      throw new Error("GEMINI_API_KEY is missing or invalid. Please check your environment variables.");
+      throw new Error("GEMINI_API_KEY is missing. Please ensure it is set in your deployment environment variables.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
@@ -163,9 +169,9 @@ ${JSON.stringify(currentContext || {})}
   } catch (error) {
     console.error("AI Service Error:", error);
     const errorMessage = error instanceof Error ? error.message : "";
-    if (errorMessage.includes("GEMINI_API_KEY")) {
+    if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("VITE_GEMINI_API_KEY")) {
       return {
-        text: "O Doutor IA precisa de uma chave de API configurada para funcionar. Por favor, adicione a GEMINI_API_KEY nas configurações do projeto."
+        text: "O Doutor IA precisa de uma chave de API configurada para funcionar. Por favor, adicione a GEMINI_API_KEY ou VITE_GEMINI_API_KEY nas configurações do projeto."
       };
     }
     return {
