@@ -6,6 +6,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Facebook,
+  Instagram,
+  MessageCircle,
+  Music,
+  Globe,
   Camera,
   Upload,
   Edit2,
@@ -1357,16 +1362,78 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
     }
 
     try {
+      // Small delay to ensure all animations are finished and images are ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create a temporary container to avoid layout shifts
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 3, // Higher scale for better quality
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        onclone: (clonedDoc) => {
+          // Aggressively fix oklab/oklch unsupported in html2canvas by replacing them in all style tags
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            try {
+              styleTags[i].innerHTML = styleTags[i].innerHTML
+                .replace(/oklch\([^)]+\)/g, '#00478d') // Fallback to primary color
+                .replace(/oklab\([^)]+\)/g, '#00478d');
+            } catch (e) {
+              console.warn('Failed to patch style tag', e);
+            }
+          }
+
+          const clonedElement = clonedDoc.getElementById('disease-content');
+          if (clonedElement) {
+            clonedElement.style.width = '1200px'; // Fixed width for consistent PDF layout
+            clonedElement.style.padding = '40px';
+            clonedElement.style.borderRadius = '0';
+            
+            // Fix glass effects and unsupported colors for html2canvas
+            const allElements = clonedElement.getElementsByTagName('*');
+            for (let i = 0; i < allElements.length; i++) {
+              const el = allElements[i] as HTMLElement;
+              
+              // Force standard colors for common properties if they use unsupported functions
+              // We check the inline style and also try to override computed styles
+              const style = window.getComputedStyle(el);
+              
+              if (style.backgroundColor.includes('oklab') || style.backgroundColor.includes('oklch')) {
+                el.style.setProperty('background-color', '#ffffff', 'important');
+              }
+              if (style.color.includes('oklab') || style.color.includes('oklch')) {
+                el.style.setProperty('color', '#000000', 'important');
+              }
+              if (style.borderColor.includes('oklab') || style.borderColor.includes('oklch')) {
+                el.style.setProperty('border-color', '#e5e7eb', 'important');
+              }
+
+              // Fix glass effects
+              if (el.classList.contains('glass-effect')) {
+                el.style.backdropFilter = 'none';
+                el.style.setProperty('background-color', 'rgba(255, 255, 255, 0.95)', 'important');
+              }
+            }
+
+            // Ensure all icons and images are loaded and visible
+            const icons = clonedElement.querySelectorAll('svg');
+            icons.forEach(icon => {
+              icon.style.display = 'inline-block';
+              icon.style.visibility = 'visible';
+            });
+
+            const images = clonedElement.getElementsByTagName('img');
+            for (let i = 0; i < images.length; i++) {
+              images[i].style.display = 'block';
+              images[i].style.visibility = 'visible';
+            }
+          }
+        }
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -1377,13 +1444,15 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
 
-      while (heightLeft >= 0) {
+      // Add subsequent pages if content is longer than one page
+      while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pdfHeight;
       }
 
@@ -1640,16 +1709,69 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
     }
 
     try {
+      // Small delay to ensure all animations are finished and images are ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        onclone: (clonedDoc) => {
+          // Aggressively fix oklab/oklch unsupported in html2canvas by replacing them in all style tags
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            try {
+              styleTags[i].innerHTML = styleTags[i].innerHTML
+                .replace(/oklch\([^)]+\)/g, '#00478d')
+                .replace(/oklab\([^)]+\)/g, '#00478d');
+            } catch (e) {
+              console.warn('Failed to patch style tag', e);
+            }
+          }
+
+          const clonedElement = clonedDoc.getElementById('procedure-content');
+          if (clonedElement) {
+            clonedElement.style.width = '1200px';
+            clonedElement.style.padding = '40px';
+            clonedElement.style.borderRadius = '0';
+            
+            // Fix glass effects and unsupported colors for html2canvas
+            const allElements = clonedElement.getElementsByTagName('*');
+            for (let i = 0; i < allElements.length; i++) {
+              const el = allElements[i] as HTMLElement;
+              const style = window.getComputedStyle(el);
+              
+              // Replace oklab/oklch colors which html2canvas doesn't support
+              if (style.backgroundColor.includes('oklab') || style.backgroundColor.includes('oklch')) {
+                el.style.setProperty('background-color', '#ffffff', 'important');
+              }
+              if (style.color.includes('oklab') || style.color.includes('oklch')) {
+                el.style.setProperty('color', '#000000', 'important');
+              }
+              if (style.borderColor.includes('oklab') || style.borderColor.includes('oklch')) {
+                el.style.setProperty('border-color', '#e5e7eb', 'important');
+              }
+
+              // Fix glass effects
+              if (el.classList.contains('glass-effect')) {
+                el.style.backdropFilter = 'none';
+                el.style.setProperty('background-color', 'rgba(255, 255, 255, 0.95)', 'important');
+              }
+            }
+
+            // Ensure all icons are visible
+            const icons = clonedElement.querySelectorAll('svg');
+            icons.forEach(icon => {
+              icon.style.display = 'inline-block';
+              icon.style.visibility = 'visible';
+            });
+          }
+        }
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -1660,13 +1782,13 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
 
-      while (heightLeft >= 0) {
+      while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pdfHeight;
       }
 
@@ -2454,7 +2576,7 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
                 </button>
               </div>
             </form>
-            <div className="mt-8 pt-6 border-t border-surface-container-high flex flex-col items-center gap-4">
+            <div className="mt-8 pt-6 border-t border-surface-container-high flex flex-col items-center gap-4 text-center">
               <p className="text-sm text-on-surface-variant">Já tem uma conta?</p>
               <button 
                 onClick={() => onNavigate('login')}
@@ -2463,6 +2585,12 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
                 <LogIn className="w-4 h-4" />
                 Entrar
               </button>
+              
+              <div className="mt-4 pt-4 border-t border-outline-variant/5 w-full">
+                <p className="text-[10px] text-on-surface-variant/40 font-bold tracking-widest uppercase">
+                  Desenvolvido por Xadrek Labs
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -2901,6 +3029,80 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
           Sair da Conta
         </button>
       </section>
+
+      <section className="space-y-4 pt-12 pb-8">
+        <h3 className="font-headline text-lg font-bold text-on-surface px-2">Sobre o Aplicativo</h3>
+        <div className="bg-surface-container-lowest rounded-[2rem] p-8 ambient-shadow border border-outline-variant/10 space-y-8">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-20 h-20 bg-primary/10 rounded-[2.5rem] flex items-center justify-center">
+              <Sparkles className="w-10 h-10 text-primary" />
+            </div>
+            <div>
+              <h4 className="font-headline text-2xl font-black text-on-surface">Xadrek Labs</h4>
+              <p className="text-sm text-on-surface-variant font-medium">Inovação em Saúde Digital</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                <MapPin className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Endereço</p>
+                <p className="text-on-surface text-sm font-medium leading-relaxed">
+                  Rua do Governo, 1⁰ Bairro<br />
+                  1211 Mapai Gaza, Moçambique
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">E-mail de Suporte</p>
+                <a href="mailto:xadreklabs@gmail.com" className="text-primary text-sm font-bold hover:underline">xadreklabs@gmail.com</a>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                <Phone className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Telefone</p>
+                <a href="tel:+258835069346" className="text-on-surface text-sm font-medium hover:text-primary transition-colors">+258 83 506 9346</a>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-outline-variant/10">
+            <p className="text-center text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-6">Siga-nos nas Redes Sociais</p>
+            <div className="flex justify-center gap-4">
+              <a href="https://www.facebook.com/share/1MVpFQo6YD/" target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+                <Facebook className="w-6 h-6" />
+              </a>
+              <a href="https://www.instagram.com/xadreklabs/" target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+                <Instagram className="w-6 h-6" />
+              </a>
+              <a href="https://www.tiktok.com/@xadrek.o.7?_r=1&_t=ZM-92NVS1hxKVk" target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+                <Music className="w-6 h-6" />
+              </a>
+              <a href="https://wa.me/258835069346" target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+                <MessageCircle className="w-6 h-6" />
+              </a>
+            </div>
+          </div>
+          
+          <div className="pt-8 text-center">
+            <p className="text-[10px] text-on-surface-variant/40 font-medium tracking-widest uppercase">
+              &copy; 2026 Xadrek Labs. Todos os direitos reservados.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -3046,7 +3248,7 @@ function LoginScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (s
                 </button>
               </div>
             </form>
-            <div className="mt-8 pt-6 border-t border-surface-container-high flex flex-col items-center gap-4">
+            <div className="mt-8 pt-6 border-t border-surface-container-high flex flex-col items-center gap-4 text-center">
               <p className="text-sm text-on-surface-variant font-medium">Não tem uma conta?</p>
               <button 
                 onClick={() => onNavigate('signup')}
@@ -3055,6 +3257,12 @@ function LoginScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (s
                 <UserPlus className="w-4 h-4" />
                 Criar uma conta
               </button>
+              
+              <div className="mt-4 pt-4 border-t border-outline-variant/5 w-full">
+                <p className="text-[10px] text-on-surface-variant/40 font-bold tracking-widest uppercase">
+                  Desenvolvido por Xadrek Labs
+                </p>
+              </div>
             </div>
           </div>
         </div>
