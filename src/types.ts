@@ -1,4 +1,4 @@
-export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'procedure-detail' | 'login' | 'signup' | 'ai-assistant';
+export type Screen = 'home' | 'diseases' | 'procedures' | 'profile' | 'disease-detail' | 'procedure-detail' | 'login' | 'signup' | 'ai-assistant' | 'notifications' | 'subscription';
 
 export interface Medication {
   name: string;
@@ -17,6 +17,9 @@ export interface Profile {
   birth_date?: string;
   category?: string;
   other_category?: string;
+  subscription_status?: 'active' | 'expired' | 'trial' | 'none';
+  subscription_expiry?: string;
+  subscription_plan?: 'weekly' | 'monthly' | 'quarterly' | 'trial';
 }
 
 export interface Disease {

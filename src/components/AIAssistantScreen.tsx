@@ -35,10 +35,13 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return [];
         return parsed.map((s: any) => ({
           ...s,
           date: new Date(s.date),
-          messages: s.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+          messages: Array.isArray(s.messages) 
+            ? s.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+            : []
         }));
       } catch (e) {
         console.error("Error parsing chat sessions", e);
@@ -55,7 +58,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
 
     const defaultGreeting: Message = {
       id: '1',
-      text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
+      text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde de Moçambique. Forneço informações confiáveis baseadas em protocolos da OMS, MISAU e pesquisas atualizadas. Como posso ajudar você hoje?',
       sender: 'ai',
       timestamp: new Date(),
     };
@@ -63,6 +66,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return [defaultGreeting];
         const history = parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
         
         // Check for inactivity
@@ -199,7 +203,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
           <div>
             <h1 className="font-headline font-bold text-lg text-on-surface">Doutor IA</h1>
             <p className="text-xs text-primary font-medium flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Baseado no Formulário Nacional
+              <Sparkles className="w-3 h-3" /> Fontes confiáveis: OMS, MISAU e Internet
             </p>
           </div>
         </div>
@@ -298,7 +302,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
       <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
         <div className="max-w-3xl mx-auto space-y-6">
           <AnimatePresence initial={false}>
-            {messages.map((message) => (
+            {Array.isArray(messages) && messages.map((message) => (
               <motion.div
                 key={message.id}
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -323,7 +327,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
                   <div className="text-sm leading-relaxed whitespace-pre-wrap markdown-body">
                     <ReactMarkdown>{message.text}</ReactMarkdown>
                   </div>
-                  {message.suggestions && message.suggestions.length > 0 && (
+                  {Array.isArray(message.suggestions) && message.suggestions.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-4">
                       {message.suggestions.map((suggestion, idx) => (
                         <button
@@ -390,7 +394,7 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
             </button>
           </div>
           <p className="text-[10px] text-on-surface-variant mt-3 text-center flex items-center justify-center gap-1">
-            <Info className="w-3 h-3" /> Respostas baseadas estritamente no Formulário Nacional de Medicamentos (5ª Edição).
+            <Info className="w-3 h-3" /> Informações baseadas em fontes oficiais e confiáveis, incluindo OMS, MISAU e bases de dados globais.
           </p>
         </div>
       </div>

@@ -33,6 +33,14 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return [
+          {
+            id: '1',
+            text: 'Olá! Eu sou o Hermano, o seu assistente virtual da Biblioteca da Saúde. Estou aqui para guiá-lo no acesso a informações médicas confiáveis, procedimentos de enfermagem e muito mais. Como posso ajudar você hoje?',
+            sender: 'ai',
+            timestamp: new Date(),
+          },
+        ];
         return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
       } catch (e) {
         console.error("Error parsing brain history", e);
@@ -155,7 +163,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
 
                 {/* Content */}
                 <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide overscroll-contain bg-surface dark:bg-surface-container">
-                  {messages.map((message) => (
+                  {Array.isArray(messages) && messages.map((message) => (
                     <motion.div 
                       key={message.id}
                       initial={{ opacity: 0, y: 5 }}
@@ -177,7 +185,7 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
                             <div className="leading-relaxed">
                               <ReactMarkdown>{message.text}</ReactMarkdown>
                             </div>
-                            {message.suggestions && message.suggestions.length > 0 && (
+                            {Array.isArray(message.suggestions) && message.suggestions.length > 0 && (
                               <div className="flex flex-wrap gap-2 pt-2">
                                 {message.suggestions.map((suggestion, idx) => (
                                   <button

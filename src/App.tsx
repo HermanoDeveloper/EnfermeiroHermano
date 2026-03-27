@@ -67,10 +67,11 @@ import { AIAssistantScreen } from './components/AIAssistantScreen';
 import { FloatingBrain } from './components/FloatingBrain';
 import { searchDiseaseAI, searchProcedureAI } from './services/gemini';
 
+const isDevEnv = import.meta.env.DEV;
+
 export default function App() {
-  const isDev = import.meta.env.DEV;
   const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
-    if (isDev) return 'home';
+    if (isDevEnv) return 'home';
     const saved = localStorage.getItem('currentScreen') as Screen;
     if (saved && saved !== 'login' && saved !== 'signup') return saved;
     return 'login';
@@ -83,19 +84,20 @@ export default function App() {
     const saved = localStorage.getItem('selectedProcedure');
     return saved ? JSON.parse(saved) : null;
   });
-  const [isLoggedIn, setIsLoggedIn] = useState(isDev);
+  const [isLoggedIn, setIsLoggedIn] = useState(isDevEnv);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(isDev ? {
+  const [profile, setProfile] = useState<any>(isDevEnv ? {
+    id: 'dev-user-id',
     full_name: 'Desenvolvedor (Modo Dev)',
     email: 'dev@exemplo.com',
     avatar_url: 'https://picsum.photos/seed/dev/200'
   } : null);
   const [diseases, setDiseases] = useState<Disease[]>(DISEASES);
   const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
-  const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDev);
-  const [isInitializing, setIsInitializing] = useState(!isDev);
+  const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDevEnv);
+  const [isInitializing, setIsInitializing] = useState(!isDevEnv);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [primaryColor, setPrimaryColor] = useState<string>(() => localStorage.getItem('primaryColor') || '#00478d');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -104,6 +106,8 @@ export default function App() {
   const [isEnhancingProcedure, setIsEnhancingProcedure] = useState(false);
   const [isSelectingProcedureAI, setIsSelectingProcedureAI] = useState<string | null>(null);
   const [recentHistory, setRecentHistory] = useState<any[]>([]);
+  const isSpecialUser = profile?.email === 'hermanosaia01@gmail.com';
+  const isDev = isDevEnv || isSpecialUser;
 
   const fetchHistory = async () => {
     if (!session?.user?.id) return;
@@ -526,6 +530,17 @@ export default function App() {
       );
     }
 
+    if (isLoggedIn && !isDev && currentScreen !== 'subscription' && currentScreen !== 'profile') {
+      const isTrial = profile?.subscription_status === 'trial';
+      const isActive = profile?.subscription_status === 'active';
+      const expiry = profile?.subscription_expiry ? new Date(profile.subscription_expiry) : null;
+      const isExpired = expiry ? expiry < new Date() : true;
+
+      if ((!isTrial && !isActive) || isExpired) {
+        return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
+      }
+    }
+
     switch (currentScreen) {
       case 'home':
         return <HomeScreen 
@@ -554,8 +569,12 @@ export default function App() {
             isSelectingAI={isSelectingProcedureAI}
           />
         );
+      case 'notifications':
+        return <NotificationsScreen onBack={() => setCurrentScreen('home')} />;
+      case 'subscription':
+        return <SubscriptionScreen onBack={() => setCurrentScreen('home')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
       case 'profile':
-        return <ProfileScreen profile={profile} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} onRefreshProfile={fetchProfile} />;
+        return <ProfileScreen profile={profile} onNavigate={setCurrentScreen} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} onRefreshProfile={fetchProfile} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
       case 'procedure-detail':
@@ -755,7 +774,10 @@ export default function App() {
 
               {/* Right: Notifications */}
               <div className="flex items-center">
-                <button className="p-2 rounded-full hover:bg-surface-container-low transition-colors relative">
+                <button 
+                  onClick={() => setCurrentScreen('notifications')}
+                  className="p-2 rounded-full hover:bg-surface-container-low transition-colors relative"
+                >
                   <Bell className="w-5 h-5 text-on-surface-variant" />
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full border-2 border-surface" />
                 </button>
@@ -981,7 +1003,7 @@ function HomeScreen({ diseases, procedures, onNavigate, onSelectDisease, onSelec
           </div>
           <div className="flex-1">
             <h3 className="font-headline font-bold text-on-primary-fixed">Doutor IA</h3>
-            <p className="text-xs text-on-primary-fixed/70">Guia de medicamentos e ações do site</p>
+            <p className="text-xs text-on-primary-fixed/70">IA com fontes confiáveis: OMS e MISAU</p>
           </div>
           <ChevronRight className="w-5 h-5 text-on-primary-fixed/50" />
         </div>
@@ -996,7 +1018,10 @@ function HomeScreen({ diseases, procedures, onNavigate, onSelectDisease, onSelec
           <h3 className="font-headline font-bold text-on-secondary-fixed">Procedimentos de Enfermagem</h3>
         </div>
 
-        <div className="col-span-2 md:col-span-1 bg-tertiary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all">
+        <div 
+          onClick={() => onNavigate('notifications')}
+          className="col-span-2 md:col-span-1 bg-tertiary-fixed p-5 rounded-3xl flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all"
+        >
           <div className="w-10 h-10 rounded-xl bg-on-tertiary-fixed/10 flex items-center justify-center shadow-sm">
             <Bell className="w-6 h-6 text-on-tertiary-fixed" />
           </div>
@@ -1270,7 +1295,7 @@ function ProceduresScreen({
                             <Layers className="w-3 h-3" /> Materiais Necessários
                           </h5>
                           <div className="flex flex-wrap gap-2">
-                            {proc.materials.map((item, idx) => (
+                            {Array.isArray(proc.materials) && proc.materials.map((item, idx) => (
                               <span key={idx} className="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-medium text-on-surface-variant">
                                 {item}
                               </span>
@@ -1283,7 +1308,7 @@ function ProceduresScreen({
                             <Activity className="w-3 h-3" /> Passo a Passo
                           </h5>
                           <div className="space-y-3">
-                            {proc.procedureSteps.map((step, idx) => (
+                            {Array.isArray(proc.procedureSteps) && proc.procedureSteps.map((step, idx) => (
                               <div key={idx} className="flex gap-3">
                                 <span className="w-5 h-5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                                   {idx + 1}
@@ -1300,7 +1325,7 @@ function ProceduresScreen({
                               <AlertCircle className="w-3 h-3" /> Observações Críticas
                             </h5>
                             <ul className="space-y-2">
-                              {proc.observations.map((obs, idx) => (
+                              {Array.isArray(proc.observations) && proc.observations.map((obs, idx) => (
                                 <li key={idx} className="text-xs text-on-surface-variant font-medium leading-relaxed flex gap-2">
                                   <span className="text-amber-500">•</span>
                                   {obs}
@@ -1587,7 +1612,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                 </h3>
                 {section.isMedication ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                    {(section.content as Medication[] || []).length > 0 ? (
+                    {Array.isArray(section.content) && section.content.length > 0 ? (
                       (section.content as Medication[]).map((med, i) => (
                         <div key={i} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20 space-y-3 hover:bg-surface-container transition-colors duration-200">
                           <div className="flex items-center gap-2">
@@ -1632,7 +1657,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                       </li>
                     ))}
                   </ul>
-                ) : typeof section.content === 'object' && section.content !== null ? (
+                ) : (typeof section.content === 'object' && section.content !== null) ? (
                   <div className="space-y-4">
                     {Object.entries(section.content as Record<string, string[]>).map(([subtype, items], i) => (
                       <div key={i} className="space-y-2">
@@ -1640,7 +1665,7 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
                           {subtype}
                         </h4>
                         <ul className="list-disc pl-4 space-y-1.5">
-                          {items.map((item, j) => (
+                          {Array.isArray(items) && items.map((item, j) => (
                             <li key={j} className="text-on-surface-variant leading-relaxed text-sm font-medium">
                               {item}
                             </li>
@@ -2090,6 +2115,10 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
         // Update profile with extra info
         const birthDate = birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null;
         
+        // 5-day free trial
+        const trialExpiry = new Date();
+        trialExpiry.setDate(trialExpiry.getDate() + 5);
+
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -2101,6 +2130,9 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
             other_category: otherCategory,
             phone: `${selectedCountry.code} ${phone}`,
             address,
+            subscription_status: 'trial',
+            subscription_expiry: trialExpiry.toISOString(),
+            subscription_plan: 'trial'
           });
 
         if (profileError) {
@@ -2599,7 +2631,7 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
   );
 }
 
-function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, onLogout: () => void, onRefreshProfile: () => Promise<void> }) {
+function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate }: { profile: any, onLogout: () => void, onRefreshProfile: () => Promise<void>, onNavigate: (s: Screen) => void }) {
   const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2859,6 +2891,52 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
       </section>
 
       <section className="space-y-4">
+        <h3 className="font-headline text-lg font-bold text-on-surface px-2">Subscrição</h3>
+        <div className="bg-surface-container-lowest rounded-[2rem] p-6 ambient-shadow border border-outline-variant/10 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                profile?.subscription_status === 'active' ? "bg-green-500/10 text-green-600" : 
+                profile?.subscription_status === 'trial' ? "bg-primary/10 text-primary" : 
+                "bg-error/10 text-error"
+              )}>
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Status Atual</p>
+                <p className="text-sm font-bold text-on-surface">
+                  {profile?.subscription_status === 'active' ? 'Plano Ativo' : 
+                   profile?.subscription_status === 'trial' ? 'Período de Teste' : 
+                   'Subscrição Expirada'}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => onNavigate('subscription')}
+              className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold hover:bg-primary/20 transition-all"
+            >
+              Gerir
+            </button>
+          </div>
+
+          {(profile?.subscription_status === 'active' || profile?.subscription_status === 'trial') && (
+            <div className="flex items-center gap-4 pt-2 border-t border-outline-variant/10">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5 text-on-surface-variant" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Válido até</p>
+                <p className="text-sm font-medium text-on-surface">
+                  {profile?.subscription_expiry ? new Date(profile.subscription_expiry).toLocaleDateString() : 'N/A'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-4">
         <h3 className="font-headline text-lg font-bold text-on-surface px-2">Informações da Conta</h3>
         <div className="bg-surface-container-lowest rounded-[2rem] p-6 ambient-shadow border border-outline-variant/10 space-y-6">
           <ProfileField icon={<Mail className="w-5 h-5" />} label="E-mail" value={profile?.email || 'Não informado'} />
@@ -2998,7 +3076,10 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile }: { profile: any, 
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5">
+        <div 
+          onClick={() => onNavigate('notifications')}
+          className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5"
+        >
           <div className="w-12 h-12 rounded-2xl bg-secondary-fixed/30 flex items-center justify-center">
             <Bell className="w-6 h-6 text-secondary" />
           </div>
@@ -3117,6 +3198,488 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
       <div className="flex-1 border-b border-outline-variant/10 pb-4">
         <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">{label}</p>
         <p className="text-on-surface font-medium">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { onBack: () => void, profile: any, onRefreshProfile: () => Promise<void>, isDevEnv: boolean }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<'mpesa' | 'mkesh' | 'emola' | 'card'>('mpesa');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+
+  const plans = [
+    { 
+      id: 'weekly', 
+      name: 'Semanal', 
+      price: '30 MZN', 
+      amount: 30,
+      duration: '7 dias',
+      description: 'Ideal para consultas rápidas e pontuais.',
+      icon: <Clock className="w-6 h-6" />,
+      days: 7
+    },
+    { 
+      id: 'monthly', 
+      name: 'Mensal', 
+      price: '50 MZN', 
+      amount: 50,
+      duration: '30 dias',
+      description: 'O plano mais popular para acompanhamento contínuo.',
+      icon: <Calendar className="w-6 h-6" />,
+      days: 30,
+      popular: true
+    },
+    { 
+      id: 'quarterly', 
+      name: 'Trimestral', 
+      price: '105 MZN', 
+      amount: 105,
+      duration: '90 dias',
+      description: 'Economize 30% com o plano de longa duração.',
+      icon: <ShieldCheck className="w-6 h-6" />,
+      days: 90,
+      discount: '30% OFF'
+    }
+  ];
+
+  const validatePhone = (number: string, method: string) => {
+    const clean = number.replace(/\D/g, '');
+    if (clean.length !== 9) return 'O número deve ter exatamente 9 dígitos';
+    
+    if (method === 'mpesa') {
+      if (!clean.startsWith('84') && !clean.startsWith('85')) return 'M-Pesa deve iniciar com 84 ou 85';
+    } else if (method === 'mkesh') {
+      if (!clean.startsWith('82') && !clean.startsWith('83')) return 'M-Kesh deve iniciar com 82 ou 83';
+    } else if (method === 'emola') {
+      if (!clean.startsWith('86') && !clean.startsWith('87')) return 'E-Mola deve iniciar com 86 ou 87';
+    }
+    return null;
+  };
+
+  const handleSubscribe = async () => {
+    if (!selectedPlan) return;
+    
+    const error = selectedMethod !== 'card' ? validatePhone(phoneNumber, selectedMethod) : null;
+    if (error) {
+      setPhoneError(error);
+      return;
+    }
+    setPhoneError(null);
+
+    console.log('Subscribing to plan:', selectedPlan.id, 'with method:', selectedMethod);
+    if (!profile?.id && !isDevEnv) {
+      console.error('No profile ID found');
+      return;
+    }
+    
+    setLoading(selectedPlan.id);
+    setStatus('processing');
+
+    try {
+      setErrorMessage(null);
+      // Call our backend to create the payment request
+      const response = await fetch('/api/create-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: selectedPlan.amount,
+          method: selectedMethod,
+          userId: profile?.id || 'dev-user-id',
+          planId: selectedPlan.id,
+          durationDays: selectedPlan.days,
+          phone: phoneNumber
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Falha ao criar pedido de pagamento');
+      }
+
+      // If it's a card payment or has a checkout URL, redirect the user
+      if (result.data?.checkout_url) {
+        window.location.href = result.data.checkout_url;
+        return;
+      }
+
+      // For mobile money, we might just wait for the webhook or show a message
+      // In this simulation/dev mode, we can still trigger the simulated webhook if needed
+      // but for "real" flow we would show "Check your phone"
+      
+      if (isDevEnv) {
+        console.log('Dev mode: Simulating webhook success...');
+        const userId = profile?.id || 'dev-user-id';
+        const reference = `${userId}-${Date.now().toString().slice(-8)}`;
+        
+        await fetch('/webhook', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-signature': 'simulated_signature'
+          },
+          body: JSON.stringify({
+            event: 'payment.success',
+            data: {
+              reference,
+              amount: selectedPlan.amount
+            }
+          })
+        });
+        
+        setStatus('success');
+        await onRefreshProfile();
+        setTimeout(() => {
+          onBack();
+        }, 2000);
+      } else {
+        // Real flow: show instructions
+        setStatus('success'); // Or a new state like 'waiting'
+        // For now, let's just refresh profile after a delay to see if webhook worked
+        setTimeout(async () => {
+          await onRefreshProfile();
+          onBack();
+        }, 5000);
+      }
+    } catch (error: any) {
+      console.error('Subscription error:', error);
+      setStatus('error');
+      setErrorMessage(error.message || 'Ocorreu um erro ao processar o seu pedido.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="flex-1 bg-surface flex flex-col">
+      <header className="p-6 flex items-center gap-4">
+        <button onClick={onBack} className="p-2 rounded-full hover:bg-surface-container-low transition-all">
+          <ArrowLeft className="w-6 h-6 text-on-surface" />
+        </button>
+        <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">Planos de Subscrição</h1>
+      </header>
+
+      <main className="flex-1 p-6 space-y-6 overflow-y-auto pb-12">
+        <div className="bg-primary/5 border border-primary/10 rounded-3xl p-6 space-y-2">
+          <div className="flex items-center gap-3 text-primary">
+            <Sparkles className="w-5 h-5" />
+            <span className="font-bold uppercase tracking-wider text-xs">Acesso Ilimitado</span>
+          </div>
+          <p className="text-on-surface-variant text-sm leading-relaxed">
+            Subscreva para ter acesso ilimitado a todas as funcionalidades, incluindo o Assistente de IA e informações detalhadas sobre doenças e procedimentos.
+          </p>
+        </div>
+
+        <div className="grid gap-4">
+          {plans.map((plan) => (
+            <motion.div
+              key={plan.id}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              className={cn(
+                "relative p-6 rounded-[2rem] border-2 transition-all cursor-pointer overflow-hidden",
+                selectedPlan?.id === plan.id ? "border-primary bg-primary/5" : "border-outline-variant/10 bg-surface-container-lowest",
+                loading === plan.id && "opacity-50 pointer-events-none"
+              )}
+              onClick={() => setSelectedPlan(plan)}
+            >
+              {plan.popular && (
+                <div className="absolute top-0 right-0 bg-primary text-white px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
+                  Popular
+                </div>
+              )}
+              {plan.discount && (
+                <div className="absolute top-0 right-0 bg-green-500 text-white px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
+                  {plan.discount}
+                </div>
+              )}
+
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center",
+                    selectedPlan?.id === plan.id ? "bg-primary text-white" : "bg-surface-container-high text-primary"
+                  )}>
+                    {plan.icon}
+                  </div>
+                  <div>
+                    <h3 className="font-headline text-lg font-bold text-on-surface">{plan.name}</h3>
+                    <p className="text-xs text-on-surface-variant font-medium">{plan.duration}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-headline text-xl font-black text-primary">{plan.price}</p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm text-on-surface-variant leading-relaxed">
+                {plan.description}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+
+        {selectedPlan && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-surface-container-low rounded-[2rem] p-6 border border-outline-variant/10 space-y-6"
+          >
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Método de Pagamento</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'mpesa', name: 'M-Pesa', color: 'bg-[#E61C25]' },
+                  { id: 'mkesh', name: 'M-Kesh', color: 'bg-[#FFCC00]' },
+                  { id: 'emola', name: 'E-Mola', color: 'bg-[#F7941D]' },
+                  { id: 'card', name: 'Cartão', color: 'bg-primary' }
+                ].map((method) => (
+                  <button
+                    key={method.id}
+                    onClick={() => setSelectedMethod(method.id as any)}
+                    className={cn(
+                      "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                      selectedMethod === method.id 
+                        ? "border-primary bg-primary/5" 
+                        : "border-outline-variant/10 bg-surface-container-lowest"
+                    )}
+                  >
+                    <div className={cn("w-8 h-8 rounded-full", method.color)} />
+                    <span className="text-xs font-bold text-on-surface">{method.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedMethod !== 'card' && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Número de Celular</p>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 9);
+                      setPhoneNumber(val);
+                      setPhoneError(null);
+                    }}
+                    placeholder="Ex: 841234567"
+                    className={cn(
+                      "w-full bg-surface-container-highest border-2 rounded-2xl px-6 py-4 text-on-surface font-medium focus:outline-none focus:border-primary transition-all",
+                      phoneError ? "border-error" : "border-transparent"
+                    )}
+                  />
+                  {phoneError && (
+                    <p className="text-[10px] text-error font-bold mt-2 ml-2 uppercase tracking-wider">{phoneError}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <button
+              disabled={!!loading || (selectedMethod !== 'card' && phoneNumber.length < 9)}
+              onClick={handleSubscribe}
+              className={cn(
+                "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
+                "bg-primary text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+              )}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>Pagar {selectedPlan.price}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            {status === 'error' && errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 rounded-2xl bg-error/10 border border-error/20 flex items-center gap-3"
+              >
+                <AlertTriangle className="w-5 h-5 text-error shrink-0" />
+                <p className="text-xs text-error font-bold leading-relaxed">{errorMessage}</p>
+              </motion.div>
+            )}
+
+            {status === 'success' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center gap-3"
+              >
+                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                <p className="text-xs text-green-500 font-bold leading-relaxed">
+                  Pedido enviado! Verifique o seu celular para confirmar o pagamento.
+                </p>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+
+        <div className="text-center space-y-2 pt-4">
+          <p className="text-[10px] text-on-surface-variant font-medium">
+            Pagamentos seguros processados via Paysuite.
+          </p>
+          <p className="text-[10px] text-on-surface-variant/60">
+            Ao subscrever, você concorda com os nossos Termos de Serviço e Política de Privacidade.
+          </p>
+        </div>
+      </main>
+
+      <AnimatePresence>
+        {status !== 'idle' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-surface rounded-[2.5rem] p-8 max-w-sm w-full text-center space-y-6 shadow-2xl"
+            >
+              {status === 'processing' && (
+                <>
+                  <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                    <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-headline text-xl font-bold text-on-surface">Processando Pagamento</h3>
+                    <p className="text-sm text-on-surface-variant">Aguarde um momento enquanto confirmamos a sua transação...</p>
+                  </div>
+                </>
+              )}
+
+              {status === 'success' && (
+                <>
+                  <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-12 h-12 text-green-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-headline text-xl font-bold text-on-surface">Subscrição Ativa!</h3>
+                    <p className="text-sm text-on-surface-variant">Obrigado! Agora você tem acesso ilimitado a todas as funcionalidades.</p>
+                  </div>
+                </>
+              )}
+
+              {status === 'error' && (
+                <>
+                  <div className="w-20 h-20 bg-error/10 rounded-full flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-12 h-12 text-error" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-headline text-xl font-bold text-on-surface">Erro no Pagamento</h3>
+                    <p className="text-sm text-on-surface-variant">Não foi possível processar o seu pagamento. Por favor, tente novamente.</p>
+                  </div>
+                  <button
+                    onClick={() => setStatus('idle')}
+                    className="w-full py-3 bg-surface-container-high text-on-surface rounded-2xl font-bold"
+                  >
+                    Tentar Novamente
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+function NotificationsScreen({ onBack }: { onBack: () => void }) {
+  const notifications = [
+    {
+      id: 1,
+      title: "Novo Protocolo Adicionado",
+      description: "O protocolo de 'Punção Venosa Periférica' foi atualizado com as novas diretrizes de 2026.",
+      time: "2 horas atrás",
+      type: "update",
+      isNew: true
+    },
+    {
+      id: 2,
+      title: "Dica de Saúde do Dia",
+      description: "Lembre-se de manter a hidratação constante durante o plantão para manter o foco e a energia.",
+      time: "5 horas atrás",
+      type: "tip",
+      isNew: true
+    },
+    {
+      id: 3,
+      title: "Sistema Atualizado",
+      description: "A Biblioteca da Saúde agora conta com integração de IA para busca de medicamentos.",
+      time: "1 dia atrás",
+      type: "system",
+      isNew: false
+    },
+    {
+      id: 4,
+      title: "Novo Artigo Científico",
+      description: "Confira o novo estudo sobre o manejo da Hipertensão Arterial em pacientes idosos.",
+      time: "2 dias atrás",
+      type: "article",
+      isNew: false
+    }
+  ];
+
+  return (
+    <div className="min-h-screen bg-surface p-4 md:p-8 pb-32">
+      <header className="flex items-center gap-4 mb-8">
+        <button onClick={onBack} className="p-2 rounded-full hover:bg-surface-container-low transition-colors">
+          <ArrowLeft className="w-6 h-6 text-on-surface" />
+        </button>
+        <h1 className="font-headline text-2xl font-black text-on-surface">Notificações</h1>
+      </header>
+
+      <div className="max-w-2xl mx-auto space-y-4">
+        {notifications.map((notif) => (
+          <div 
+            key={notif.id}
+            className={cn(
+              "p-5 rounded-[2rem] border transition-all ambient-shadow flex gap-4",
+              notif.isNew 
+                ? "bg-surface-container-lowest border-primary/20" 
+                : "bg-surface-container-low border-outline-variant/10 opacity-80"
+            )}
+          >
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+              notif.type === 'update' ? "bg-primary/10 text-primary" :
+              notif.type === 'tip' ? "bg-secondary/10 text-secondary" :
+              notif.type === 'system' ? "bg-tertiary/10 text-tertiary" :
+              "bg-surface-container-highest text-on-surface-variant"
+            )}>
+              {notif.type === 'update' ? <RefreshCw className="w-6 h-6" /> :
+               notif.type === 'tip' ? <Sparkles className="w-6 h-6" /> :
+               notif.type === 'system' ? <ShieldCheck className="w-6 h-6" /> :
+               <FileText className="w-6 h-6" />}
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-on-surface">{notif.title}</h3>
+                <span className="text-[10px] font-bold text-on-surface-variant/50 uppercase tracking-wider">{notif.time}</span>
+              </div>
+              <p className="text-sm text-on-surface-variant leading-relaxed">{notif.description}</p>
+              {notif.isNew && (
+                <div className="pt-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary text-[10px] font-black text-on-primary uppercase tracking-widest">Novo</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
