@@ -111,15 +111,19 @@ export default function App() {
 
   const fetchHistory = async () => {
     if (!session?.user?.id) return;
-    const { data, error } = await supabase
-      .from('search_history')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    
-    if (data) setRecentHistory(data);
-    if (error) console.error('Error fetching history:', error);
+    try {
+      const { data, error } = await supabase
+        .from('search_history')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (data) setRecentHistory(data);
+      if (error) console.error('Error fetching history:', error);
+    } catch (err) {
+      console.error('Network error fetching history:', err);
+    }
   };
 
   const recordHistory = async (query: string, type: string = 'search', metadata: any = {}) => {
@@ -153,7 +157,7 @@ export default function App() {
             metadata
           });
       }
-      fetchHistory();
+      await fetchHistory();
     } catch (error) {
       console.error('Error recording history:', error);
     }
@@ -560,7 +564,11 @@ export default function App() {
             procedures={procedures}
             onNavigate={setCurrentScreen} 
             onSelectProcedure={async (p) => {
-              await handleSelectProcedureWithAI(p);
+              try {
+                await handleSelectProcedureWithAI(p);
+              } catch (err) {
+                console.error('Error in onSelectProcedure:', err);
+              }
             }}
             searchQuery={searchQuery}
             onSearch={setSearchQuery}
@@ -574,7 +582,18 @@ export default function App() {
       case 'subscription':
         return <SubscriptionScreen onBack={() => setCurrentScreen('home')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
       case 'profile':
-        return <ProfileScreen profile={profile} onNavigate={setCurrentScreen} onLogout={async () => { await supabase.auth.signOut(); setIsLoggedIn(false); setCurrentScreen('login'); }} onRefreshProfile={fetchProfile} />;
+        return <ProfileScreen profile={profile} onNavigate={setCurrentScreen} onLogout={async () => { 
+          try {
+            await supabase.auth.signOut(); 
+            setIsLoggedIn(false); 
+            setCurrentScreen('login'); 
+          } catch (err) {
+            console.error('Error during logout:', err);
+            // Force logout anyway
+            setIsLoggedIn(false);
+            setCurrentScreen('login');
+          }
+        }} onRefreshProfile={fetchProfile} />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
       case 'procedure-detail':
@@ -2683,16 +2702,21 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate }: { pr
     try {
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        
-        const { error } = await supabase
-          .from('profiles')
-          .update({ avatar_url: base64String })
-          .eq('id', profile.id);
+        try {
+          const base64String = reader.result as string;
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_url: base64String })
+            .eq('id', profile.id);
 
-        if (error) throw error;
-        await onRefreshProfile();
-        setMessage({ type: 'success', text: 'Foto de perfil atualizada!' });
+          if (error) throw error;
+          await onRefreshProfile();
+          setMessage({ type: 'success', text: 'Foto de perfil atualizada!' });
+        } catch (error) {
+          console.error('Error updating profile with avatar:', error);
+          setMessage({ type: 'error', text: 'Erro ao guardar a foto de perfil.' });
+        }
       };
       reader.readAsDataURL(file);
     } catch (error) {
@@ -3344,8 +3368,13 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         setStatus('success'); // Or a new state like 'waiting'
         // For now, let's just refresh profile after a delay to see if webhook worked
         setTimeout(async () => {
-          await onRefreshProfile();
-          onBack();
+          try {
+            await onRefreshProfile();
+            onBack();
+          } catch (err) {
+            console.error('Error refreshing profile after subscription:', err);
+            onBack(); // Still go back even if refresh fails
+          }
         }, 5000);
       }
     } catch (error: any) {
@@ -3505,10 +3534,51 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="p-4 rounded-2xl bg-error/10 border border-error/20 flex items-center gap-3"
+                className="p-4 rounded-2xl bg-error/10 border border-error/20 space-y-3"
               >
-                <AlertTriangle className="w-5 h-5 text-error shrink-0" />
-                <p className="text-xs text-error font-bold leading-relaxed">{errorMessage}</p>
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-error shrink-0" />
+                  <p className="text-xs text-error font-bold leading-relaxed">{errorMessage}</p>
+                </div>
+                
+                {(errorMessage.includes('PAYSUITE_API_KEY') || isDevEnv) && (
+                  <button
+                    onClick={async () => {
+                      setStatus('processing');
+                      setErrorMessage(null);
+                      try {
+                        console.log('Mock mode: Simulating webhook success...');
+                        const userId = profile?.id || 'dev-user-id';
+                        const reference = `${userId}-${Date.now().toString().slice(-8)}`;
+                        
+                        await fetch('/webhook', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'x-webhook-signature': 'simulated_signature'
+                          },
+                          body: JSON.stringify({
+                            event: 'payment.success',
+                            data: {
+                              reference,
+                              amount: selectedPlan.amount
+                            }
+                          })
+                        });
+                        
+                        setStatus('success');
+                        await onRefreshProfile();
+                        setTimeout(() => onBack(), 2000);
+                      } catch (err) {
+                        setStatus('error');
+                        setErrorMessage('Falha ao simular pagamento.');
+                      }
+                    }}
+                    className="w-full py-2 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                  >
+                    Simular Pagamento (Modo de Teste)
+                  </button>
+                )}
               </motion.div>
             )}
 

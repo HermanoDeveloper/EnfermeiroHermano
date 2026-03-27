@@ -30,15 +30,19 @@ async function startServer() {
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
     if (!amount || !userId || !planId || !durationDays) {
-      return res.status(400).json({ error: "Missing required fields" });
+      console.error("Missing required fields in create-payment:", { amount, userId, planId, durationDays });
+      return res.status(400).json({ error: "Campos obrigatórios em falta" });
     }
 
     const PAYSUITE_API_KEY = process.env.PAYSUITE_API_KEY;
     const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
 
-    if (!PAYSUITE_API_KEY) {
-      console.error("PAYSUITE_API_KEY is not configured");
-      return res.status(500).json({ error: "Payment provider not configured" });
+    if (!PAYSUITE_API_KEY || PAYSUITE_API_KEY.trim() === "") {
+      console.error("PAYSUITE_API_KEY is not configured in environment variables");
+      return res.status(500).json({ 
+        error: "Configuração Incompleta", 
+        message: "A chave de API da PaySuite não está configurada no servidor. Por favor, adicione PAYSUITE_API_KEY às variáveis de ambiente." 
+      });
     }
 
     // Construct a reference that fits in 50 characters (PaySuite limit)
@@ -57,14 +61,28 @@ async function startServer() {
         });
 
       if (upsertError) {
-        console.error("Error storing pending subscription:", upsertError);
-        // We continue anyway, but it might fail at webhook if columns are missing
+        console.error("Error storing pending subscription:", JSON.stringify(upsertError, null, 2));
+        let message = "Não foi possível guardar os detalhes da subscrição no banco de dados.";
+        
+        if (upsertError.code === '42703') {
+          message = "A tabela 'profiles' está em falta com as colunas 'pending_plan' ou 'pending_days'. Por favor, execute este SQL no Supabase: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pending_plan TEXT, ADD COLUMN IF NOT EXISTS pending_days INTEGER;";
+          console.error("CRITICAL: The 'profiles' table is missing pending subscription columns!");
+        } else if (upsertError.code === '42P01') {
+          message = "A tabela 'profiles' não existe no Supabase.";
+        }
+
+        return res.status(500).json({ 
+          error: "Erro de Base de Dados", 
+          message: message,
+          details: upsertError.message,
+          code: upsertError.code
+        });
       }
 
       const response = await fetch("https://paysuite.tech/api/v1/payments", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${PAYSUITE_API_KEY}`,
+          "Authorization": `Bearer ${PAYSUITE_API_KEY.trim()}`,
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
@@ -80,7 +98,13 @@ async function startServer() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("PaySuite API error:", data);
+        console.error("PaySuite API error:", JSON.stringify(data, null, 2));
+        if (response.status === 401) {
+          return res.status(401).json({ 
+            error: "Erro de Autenticação na PaySuite", 
+            message: "A chave de API da PaySuite (PAYSUITE_API_KEY) é inválida ou não foi configurada corretamente nas definições do projeto." 
+          });
+        }
         return res.status(response.status).json(data);
       }
 
@@ -203,6 +227,12 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    if (!process.env.PAYSUITE_API_KEY) {
+      console.warn("WARNING: PAYSUITE_API_KEY is not set. Payments will not work.");
+    }
+    if (!process.env.PAYSUITE_WEBHOOK_SECRET) {
+      console.warn("WARNING: PAYSUITE_WEBHOOK_SECRET is not set. Webhooks will not be verified.");
+    }
   });
 }
 
