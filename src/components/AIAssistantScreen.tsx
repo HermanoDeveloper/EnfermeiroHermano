@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info, History, X, Calendar } from 'lucide-react';
+import { Send, Bot, User, ArrowLeft, RefreshCw, Sparkles, Info, History, X, Calendar, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { askAI } from '../services/gemini';
+import { askAI, isAIConfigured } from '../services/gemini';
 import { cn } from '../lib/utils';
 import { Screen } from '../types';
 
@@ -224,6 +224,19 @@ export function AIAssistantScreen({ onBack, onNavigate, onShowDisease, onShowPro
           </button>
         </div>
       </header>
+
+      {/* API Key Warning */}
+      {!isAIConfigured && (
+        <div className="bg-error/10 border-b border-error/20 px-6 py-3 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-bold text-error">Chave de API Ausente</p>
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              O Doutor IA não está configurado corretamente. Por favor, adicione a chave <code className="bg-error/5 px-1 rounded">GEMINI_API_KEY</code> nas variáveis de ambiente para ativar as funcionalidades de inteligência artificial.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* History Modal */}
       <AnimatePresence>

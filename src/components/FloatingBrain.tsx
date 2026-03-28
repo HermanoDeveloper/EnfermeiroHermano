@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bot, X, Send, Sparkles, Command, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { askAI, AIResponse } from '../services/gemini';
+import { askAI, AIResponse, isAIConfigured } from '../services/gemini';
+import { AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Screen } from '../types';
 
@@ -163,6 +164,17 @@ export function FloatingBrain({ onNavigate, onSearch, onShowDisease, onShowProce
 
                 {/* Content */}
                 <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide overscroll-contain bg-surface dark:bg-surface-container">
+                  {!isAIConfigured && (
+                    <div className="bg-error/10 border border-error/20 p-3 rounded-2xl flex items-start gap-2 mb-4">
+                      <AlertCircle className="w-4 h-4 text-error shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-bold text-error">IA não configurada</p>
+                        <p className="text-[10px] text-on-surface-variant leading-tight">
+                          Adicione a <code className="bg-error/5 px-1 rounded">GEMINI_API_KEY</code> para ativar o Hermano.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {Array.isArray(messages) && messages.map((message) => (
                     <motion.div 
                       key={message.id}

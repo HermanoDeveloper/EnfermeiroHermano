@@ -6,6 +6,17 @@ import { Disease, Procedure } from "../types";
 // Lazy initialization to avoid crash if key is missing
 let aiInstance: GoogleGenAI | null = null;
 
+export const isAIConfigured = !!(
+  process.env.GEMINI_API_KEY || 
+  import.meta.env.VITE_GEMINI_API_KEY || 
+  import.meta.env.GEMINI_API_KEY ||
+  process.env.API_KEY ||
+  import.meta.env.API_KEY
+) && (
+  process.env.GEMINI_API_KEY !== 'undefined' &&
+  import.meta.env.VITE_GEMINI_API_KEY !== 'undefined'
+);
+
 function getAI() {
   if (!aiInstance) {
     // Vite replaces process.env.GEMINI_API_KEY during build if defined in vite.config.ts
@@ -18,7 +29,9 @@ function getAI() {
       import.meta.env.API_KEY;
 
     if (!apiKey || apiKey === 'undefined' || apiKey === '' || apiKey === 'null') {
-      throw new Error("GEMINI_API_KEY is missing. Please ensure it is set in your deployment environment variables.");
+      const error = new Error("GEMINI_API_KEY is missing. Please ensure it is set in your deployment environment variables.");
+      (error as any).isApiKeyMissing = true;
+      throw error;
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
@@ -167,16 +180,34 @@ ${JSON.stringify(currentContext || {})}
       text: result.text || "Não foi possível processar sua solicitação.",
       command: result.command
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Service Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "";
-    if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("VITE_GEMINI_API_KEY")) {
+    const errorMessage = error?.message || "";
+    
+    if (error?.isApiKeyMissing || errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("VITE_GEMINI_API_KEY") || errorMessage.includes("API_KEY")) {
       return {
-        text: "O Doutor IA precisa de uma chave de API configurada para funcionar. Por favor, adicione a GEMINI_API_KEY ou VITE_GEMINI_API_KEY nas configurações do projeto."
+        text: "### ⚠️ Erro de Configuração\n\nO Doutor IA precisa de uma chave de API válida para funcionar. \n\n**Ação Necessária:**\nPor favor, adicione a `GEMINI_API_KEY` ou `VITE_GEMINI_API_KEY` nas configurações do projeto (Environment Variables).",
+        suggestions: ["Como configurar a API?", "Falar com suporte"]
       };
     }
+
+    if (errorMessage.includes("quota") || errorMessage.includes("429")) {
+      return {
+        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. \n\n**O que fazer?**\nPor favor, aguarde alguns minutos antes de tentar novamente ou verifique se há uma subscrição ativa que aumente seus limites.",
+        suggestions: ["Ver planos de subscrição", "Tentar novamente mais tarde"]
+      };
+    }
+
+    if (errorMessage.includes("safety") || errorMessage.includes("blocked")) {
+      return {
+        text: "### 🛡️ Conteúdo Restrito\n\nDesculpe, mas não posso processar essa solicitação pois ela acionou os filtros de segurança do sistema. \n\n**Dica:**\nTente reformular sua pergunta de forma mais técnica ou médica, focando em informações educativas e de saúde.",
+        suggestions: ["Reformular pergunta", "Ver termos de uso"]
+      };
+    }
+
     return {
-      text: "Desculpe, o cérebro do sistema está temporariamente indisponível. Por favor, tente novamente."
+      text: "### 🔌 Sistema Indisponível\n\nDesculpe, o cérebro do sistema (IA) encontrou um problema técnico inesperado e está temporariamente fora do ar.\n\n**Detalhes:** " + (errorMessage.substring(0, 100) || "Erro de conexão desconhecido") + "...\n\nPor favor, tente novamente em alguns instantes.",
+      suggestions: ["Tentar novamente", "Voltar ao início"]
     };
   }
 }

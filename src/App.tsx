@@ -65,7 +65,7 @@ import { DETAILED_PROCEDURES, DetailedProcedure } from './data/procedures';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { AIAssistantScreen } from './components/AIAssistantScreen';
 import { FloatingBrain } from './components/FloatingBrain';
-import { searchDiseaseAI, searchProcedureAI } from './services/gemini';
+import { searchDiseaseAI, searchProcedureAI, isAIConfigured } from './services/gemini';
 
 const isDevEnv = import.meta.env.DEV;
 
@@ -97,6 +97,7 @@ export default function App() {
   const [diseases, setDiseases] = useState<Disease[]>(DISEASES);
   const [procedures, setProcedures] = useState<Procedure[]>(PROCEDURES);
   const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDevEnv);
+  const [aiConfigError, setAiConfigError] = useState(!isAIConfigured && !isDevEnv);
   const [isInitializing, setIsInitializing] = useState(!isDevEnv);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [primaryColor, setPrimaryColor] = useState<string>(() => localStorage.getItem('primaryColor') || '#00478d');
@@ -107,6 +108,7 @@ export default function App() {
   const [isSelectingProcedureAI, setIsSelectingProcedureAI] = useState<string | null>(null);
   const [recentHistory, setRecentHistory] = useState<any[]>([]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const isSpecialUser = profile?.email === 'hermanosaia01@gmail.com';
   const isDev = isDevEnv || isSpecialUser;
 
@@ -124,6 +126,17 @@ export default function App() {
       }, 2000);
     }
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+  };
 
   const fetchHistory = async () => {
     if (!session?.user?.id) return;
@@ -209,9 +222,17 @@ export default function App() {
           setSelectedDisease(result);
           recordHistory(result.name, 'view', { id: result.id, category: 'disease' });
           setCurrentScreen('disease-detail');
+        } else {
+          showToast('Não foi possível encontrar informações detalhadas sobre esta doença no momento.', 'error');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Global AI Search failed", error);
+        const errorMsg = error?.message || "";
+        if (errorMsg.includes("GEMINI_API_KEY")) {
+          showToast('Erro de Configuração: Chave da IA não encontrada.', 'error');
+        } else {
+          showToast('Ocorreu um erro ao pesquisar com IA. Tente novamente.', 'error');
+        }
       } finally {
         setIsSearchingAI(false);
       }
@@ -227,9 +248,12 @@ export default function App() {
           setSelectedProcedure(result);
           recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
           setCurrentScreen('procedure-detail');
+        } else {
+          showToast('Não foi possível encontrar detalhes sobre este procedimento no momento.', 'error');
         }
       } catch (error) {
         console.error("Global AI Procedure Search failed", error);
+        showToast('Ocorreu um erro ao pesquisar o procedimento com IA.', 'error');
       } finally {
         setIsSearchingAI(false);
       }
@@ -245,9 +269,13 @@ export default function App() {
       const result = await searchProcedureAI(procedure.name);
       if (result) {
         setSelectedProcedure(result);
+        showToast('Procedimento atualizado com IA com sucesso!', 'success');
+      } else {
+        showToast('Não foi possível obter detalhes adicionais da IA.', 'error');
       }
     } catch (error) {
       console.error("Enhance Procedure AI failed", error);
+      showToast('Erro ao aprimorar procedimento com IA.', 'error');
     } finally {
       setIsEnhancingProcedure(false);
     }
@@ -268,6 +296,7 @@ export default function App() {
         // Fallback to local data if AI fails
         setSelectedProcedure(procedure);
         recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
+        showToast('Usando dados locais (IA indisponível).', 'error');
       }
       setCurrentScreen('procedure-detail');
     } catch (error) {
@@ -275,6 +304,7 @@ export default function App() {
       setSelectedProcedure(procedure);
       recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
       setCurrentScreen('procedure-detail');
+      showToast('Erro na IA. Usando dados locais.', 'error');
     } finally {
       setIsSelectingProcedureAI(null);
     }
@@ -932,6 +962,24 @@ export default function App() {
           </div>
         </nav>
       )}
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className={cn(
+              "fixed bottom-24 left-1/2 z-[100] px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 min-w-[300px]",
+              toast.type === 'success' ? "bg-primary text-white" : "bg-error text-white"
+            )}
+          >
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            <p className="text-sm font-medium">{toast.message}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
