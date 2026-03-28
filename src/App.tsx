@@ -89,7 +89,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(isDevEnv ? {
-    id: 'dev-user-id',
+    id: '00000000-0000-0000-0000-000000000000',
     full_name: 'Desenvolvedor (Modo Dev)',
     email: 'dev@exemplo.com',
     avatar_url: 'https://picsum.photos/seed/dev/200'
@@ -3349,6 +3349,25 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     }
   ];
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      if (event.data?.type === 'PAYMENT_SUCCESS') {
+        setStatus('success');
+        onRefreshProfile();
+        setTimeout(() => {
+          onBack();
+        }, 2000);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onRefreshProfile, onBack]);
+
   const validatePhone = (number: string, method: string) => {
     const clean = number.replace(/\D/g, '');
     if (clean.length !== 9) return 'O número deve ter exatamente 9 dígitos';
@@ -3393,7 +3412,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         body: JSON.stringify({
           amount: selectedPlan.amount,
           method: selectedMethod,
-          userId: profile?.id || 'dev-user-id',
+          userId: profile?.id || '00000000-0000-0000-0000-000000000000',
           planId: selectedPlan.id,
           durationDays: selectedPlan.days,
           phone: phoneNumber
@@ -3408,7 +3427,17 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
 
       // If it's a card payment or has a checkout URL, redirect the user
       if (result.data?.checkout_url) {
-        window.location.href = result.data.checkout_url;
+        const authWindow = window.open(
+          result.data.checkout_url,
+          'payment_popup',
+          'width=600,height=700'
+        );
+        
+        if (!authWindow) {
+          setErrorMessage('O popup foi bloqueado. Por favor, permita popups para este site para concluir o pagamento.');
+          setStatus('error');
+          setLoading(null);
+        }
         return;
       }
 
@@ -3418,7 +3447,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
       
       if (isDevEnv) {
         console.log('Dev mode: Simulating webhook success...');
-        const userId = profile?.id || 'dev-user-id';
+        const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
         const reference = `${userId}-${Date.now().toString().slice(-8)}`;
         
         await fetch('/webhook', {
@@ -3626,7 +3655,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
                       setErrorMessage(null);
                       try {
                         console.log('Mock mode: Simulating webhook success...');
-                        const userId = profile?.id || 'dev-user-id';
+                        const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
                         const reference = `${userId}-${Date.now().toString().slice(-8)}`;
                         
                         await fetch('/webhook', {

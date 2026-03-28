@@ -1,78 +1,10 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel, GenerateContentResponse } from "@google/genai";
 import { MEDICATION_FORM_TEXT } from "../data/medicationData";
 import { NURSING_MANUAL_TEXT } from "../data/nursingManual";
 import { Disease, Procedure } from "../types";
 
-// Lazy initialization to avoid crash if key is missing
-let aiInstance: GoogleGenAI | null = null;
-
-export const isAIConfigured = !!(
-  process.env.GEMINI_API_KEY || 
-  import.meta.env.VITE_GEMINI_API_KEY || 
-  import.meta.env.GEMINI_API_KEY ||
-  process.env.API_KEY ||
-  import.meta.env.API_KEY
-) && (
-  process.env.GEMINI_API_KEY !== 'undefined' &&
-  import.meta.env.VITE_GEMINI_API_KEY !== 'undefined'
-);
-
-function getAI() {
-  if (!aiInstance) {
-    // Vite replaces process.env.GEMINI_API_KEY during build if defined in vite.config.ts
-    // We also check import.meta.env as a fallback for standard Vite behavior
-    const apiKey = 
-      process.env.GEMINI_API_KEY || 
-      import.meta.env.VITE_GEMINI_API_KEY || 
-      import.meta.env.GEMINI_API_KEY ||
-      process.env.API_KEY ||
-      import.meta.env.API_KEY;
-
-    if (!apiKey || apiKey === 'undefined' || apiKey === '' || apiKey === 'null') {
-      const error = new Error("GEMINI_API_KEY is missing. Please ensure it is set in your deployment environment variables.");
-      (error as any).isApiKeyMissing = true;
-      throw error;
-    }
-    aiInstance = new GoogleGenAI({ apiKey });
-  }
-  return aiInstance;
-}
-
-export interface AIResponse {
-  text: string;
-  command?: {
-    action: 'navigate' | 'search' | 'none' | 'show_disease' | 'show_procedure';
-    target?: string;
-    params?: any;
-  };
-  suggestions?: string[];
-}
-
-function extractJSON(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-    if (match) {
-      try {
-        return JSON.parse(match[1]);
-      } catch (e2) {}
-    }
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      try {
-        return JSON.parse(text.substring(firstBrace, lastBrace + 1));
-      } catch (e3) {}
-    }
-    return null;
-  }
-}
-
-export async function askAI(question: string, currentContext?: any): Promise<AIResponse> {
-  try {
-    const ai = getAI();
-    const systemInstruction = `
+// Constants for prompts and schemas
+const SYSTEM_INSTRUCTION_BASE = `
 Você é o "Doutor IA", o assistente virtual Hermano da Biblioteca da Saúde de Moçambique. Sua missão é guiar o usuário em todas as suas ações no site.
 Você é um assistente médico virtual altamente qualificado, operando no contexto do Sistema Nacional de Saúde de Moçambique.
 
@@ -104,110 +36,159 @@ ${MEDICATION_FORM_TEXT}
 
 MANUAL DE PROCEDIMENTOS BÁSICOS DE ENFERMAGEM:
 ${NURSING_MANUAL_TEXT}
-
-CONTEXTO ATUAL DO APP:
-${JSON.stringify(currentContext || {})}
 `;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: question,
-        config: {
-          systemInstruction,
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              text: { type: Type.STRING, description: "A resposta textual para o usuário." },
-              suggestions: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "2-3 sugestões de perguntas curtas de acompanhamento."
-              },
-              command: {
-                type: Type.OBJECT,
-                properties: {
-                  action: { type: Type.STRING, enum: ["navigate", "search", "none", "show_disease", "show_procedure"] },
-                  target: { type: Type.STRING, description: "O destino da navegação, termo de busca ou objeto da doença/procedimento." },
-                  params: { type: Type.OBJECT, description: "Dados estruturados se action for show_disease ou show_procedure." }
-                },
-                required: ["action"]
-              }
-            },
-            required: ["text"]
-          }
-        },
-      });
-    } catch (searchError) {
-      console.warn("AI Search Grounding failed, falling back to standard generation", searchError);
-      // Fallback without googleSearch
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: question,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              text: { type: Type.STRING, description: "A resposta textual para o usuário." },
-              suggestions: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "2-3 sugestões de perguntas curtas de acompanhamento."
-              },
-              command: {
-                type: Type.OBJECT,
-                properties: {
-                  action: { type: Type.STRING, enum: ["navigate", "search", "none", "show_disease", "show_procedure"] },
-                  target: { type: Type.STRING, description: "O destino da navegação, termo de busca ou objeto da doença/procedimento." },
-                  params: { type: Type.OBJECT, description: "Dados estruturados se action for show_disease ou show_procedure." }
-                },
-                required: ["action"]
-              }
-            },
-            required: ["text"]
-          }
-        },
-      });
+const ASSISTANT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    text: { type: Type.STRING, description: "A resposta textual para o usuário." },
+    suggestions: { 
+      type: Type.ARRAY, 
+      items: { type: Type.STRING },
+      description: "2-3 sugestões de perguntas curtas de acompanhamento."
+    },
+    command: {
+      type: Type.OBJECT,
+      properties: {
+        action: { type: Type.STRING, enum: ["navigate", "search", "none", "show_disease", "show_procedure"] },
+        target: { type: Type.STRING, description: "O destino da navegação, termo de busca ou objeto da doença/procedimento." },
+        params: { type: Type.OBJECT, description: "Dados estruturados se action for show_disease ou show_procedure." }
+      },
+      required: ["action"]
     }
+  },
+  required: ["text"]
+};
 
-    const result = extractJSON(response.text || "{}") || { text: "Não foi possível processar sua solicitação." };
+const DISEASE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    id: { type: Type.STRING },
+    name: { type: Type.STRING },
+    category: { type: Type.STRING },
+    description: { type: Type.STRING },
+    symptoms: { type: Type.ARRAY, items: { type: Type.STRING } },
+    causes: { type: Type.ARRAY, items: { type: Type.STRING } },
+    diagnosis: { type: Type.ARRAY, items: { type: Type.STRING } },
+    treatment: { type: Type.ARRAY, items: { type: Type.STRING } },
+    medications: {
+      type: Type.ARRAY,
+      description: "Lista de medicamentos encontrados no FNM que são indicados para esta doença.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING, description: "Nome do medicamento e apresentação" },
+          posology: { type: Type.STRING, description: "Doses e via de administração" },
+          contraindications: { type: Type.STRING, description: "Contraindicações" }
+        },
+        required: ["name", "posology", "contraindications"]
+      }
+    },
+    complications: { type: Type.ARRAY, items: { type: Type.STRING } },
+    nursingCare: { type: Type.ARRAY, items: { type: Type.STRING } },
+    prevention: { type: Type.ARRAY, items: { type: Type.STRING } },
+    type: { type: Type.STRING, enum: ["Chronic", "Infectious", "Neurological"] }
+  },
+  required: ["name", "description", "symptoms", "treatment", "type", "medications"]
+};
+
+const PROCEDURE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    id: { type: Type.STRING },
+    name: { type: Type.STRING },
+    category: { type: Type.STRING },
+    steps: { type: Type.NUMBER },
+    duration: { type: Type.STRING },
+    concept: { type: Type.STRING },
+    materials: { type: Type.ARRAY, items: { type: Type.STRING } },
+    procedureSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
+    observations: { type: Type.ARRAY, items: { type: Type.STRING } },
+    icon: { type: Type.STRING }
+  },
+  required: ["name", "category", "concept", "materials", "procedureSteps"]
+};
+
+// Lazy initialization
+let aiInstance: GoogleGenAI | null = null;
+
+export const isAIConfigured = !!process.env.GEMINI_API_KEY;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const error = new Error("GEMINI_API_KEY is missing.");
+      (error as any).isApiKeyMissing = true;
+      throw error;
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
+
+export interface AIResponse {
+  text: string;
+  command?: {
+    action: 'navigate' | 'search' | 'none' | 'show_disease' | 'show_procedure';
+    target?: string;
+    params?: any;
+  };
+  suggestions?: string[];
+}
+
+export async function askAI(question: string, currentContext?: any): Promise<AIResponse> {
+  try {
+    const ai = getAI();
+    const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
+
+    const chat = ai.chats.create({
+      model: "gemini-3-flash-preview",
+      config: {
+        systemInstruction,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: ASSISTANT_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      }
+    });
+
+    const response = await chat.sendMessage({ message: question });
+    const result = JSON.parse(response.text.trim());
+    
     return {
       text: result.text || "Não foi possível processar sua solicitação.",
-      command: result.command
+      command: result.command,
+      suggestions: result.suggestions
     };
   } catch (error: any) {
     console.error("AI Service Error:", error);
     const errorMessage = error?.message || "";
     
-    if (error?.isApiKeyMissing || errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("VITE_GEMINI_API_KEY") || errorMessage.includes("API_KEY")) {
+    if (error?.isApiKeyMissing || errorMessage.includes("API_KEY")) {
       return {
-        text: "### ⚠️ Erro de Configuração\n\nO Doutor IA precisa de uma chave de API válida para funcionar. \n\n**Ação Necessária:**\nPor favor, adicione a `GEMINI_API_KEY` ou `VITE_GEMINI_API_KEY` nas configurações do projeto (Environment Variables).",
+        text: "### ⚠️ Erro de Configuração\n\nO Doutor IA precisa de uma chave de API válida para funcionar. \n\n**Ação Necessária:**\nPor favor, adicione a `GEMINI_API_KEY` nas configurações do projeto.",
         suggestions: ["Como configurar a API?", "Falar com suporte"]
       };
     }
 
     if (errorMessage.includes("quota") || errorMessage.includes("429")) {
       return {
-        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. \n\n**O que fazer?**\nPor favor, aguarde alguns minutos antes de tentar novamente ou verifique se há uma subscrição ativa que aumente seus limites.",
-        suggestions: ["Ver planos de subscrição", "Tentar novamente mais tarde"]
+        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. Por favor, aguarde alguns minutos.",
+        suggestions: ["Ver planos", "Tentar mais tarde"]
       };
     }
 
     if (errorMessage.includes("safety") || errorMessage.includes("blocked")) {
       return {
-        text: "### 🛡️ Conteúdo Restrito\n\nDesculpe, mas não posso processar essa solicitação pois ela acionou os filtros de segurança do sistema. \n\n**Dica:**\nTente reformular sua pergunta de forma mais técnica ou médica, focando em informações educativas e de saúde.",
-        suggestions: ["Reformular pergunta", "Ver termos de uso"]
+        text: "### 🛡️ Conteúdo Restrito\n\nDesculpe, mas não posso processar essa solicitação pois ela acionou os filtros de segurança.",
+        suggestions: ["Reformular pergunta"]
       };
     }
 
     return {
-      text: "### 🔌 Sistema Indisponível\n\nDesculpe, o cérebro do sistema (IA) encontrou um problema técnico inesperado e está temporariamente fora do ar.\n\n**Detalhes:** " + (errorMessage.substring(0, 100) || "Erro de conexão desconhecido") + "...\n\nPor favor, tente novamente em alguns instantes.",
-      suggestions: ["Tentar novamente", "Voltar ao início"]
+      text: "### 🔌 Sistema Indisponível\n\nOcorreu um problema técnico inesperado. Por favor, tente novamente em alguns instantes.",
+      suggestions: ["Tentar novamente"]
     };
   }
 }
@@ -219,111 +200,34 @@ export async function searchDiseaseAI(diseaseName: string): Promise<Disease | nu
 Você é um especialista médico moçambicano encarregado de fornecer informações precisas e estruturadas sobre a doença "${diseaseName}".
 
 DIRETRIZES DE PESQUISA:
-1. INFORMAÇÕES GERAIS (Nome, Descrição, Sintomas, Causas, Diagnóstico, Complicações, Cuidados de Enfermagem, Prevenção): Use a ferramenta de busca do Google para consultar fontes oficiais e confiáveis, priorizando a Organização Mundial da Saúde (OMS/WHO) e o Ministério da Saúde de Moçambique (MISAU).
-
-2. MEDICAMENTOS E TRATAMENTOS (Medications):
-   - FONTE PRIMÁRIA: Consulte o texto do Formulário Nacional de Medicamentos (FNM) de Moçambique fornecido abaixo.
-   - FONTE SECUNDÁRIA (FALLBACK): Se a doença ou o tratamento específico não forem encontrados no FNM abaixo, você DEVE usar a ferramenta de busca do Google para encontrar informações oficiais do MISAU (Moçambique) ou da OMS (WHO).
-   - DETALHAMENTO DA POSOLOGIA: Para cada medicamento, você deve obrigatoriamente incluir a posologia completa: DOSE, INTERVALO ENTRE AS TOMAS e DURAÇÃO DO TRATAMENTO.
-   - IDENTIFICAÇÃO DA FONTE: No campo "name" ou "posology", indique claramente se a informação provém do "FNM Moçambique" ou de "Diretrizes MISAU/OMS".
-   - Não deixe a lista de medicamentos vazia se existirem tratamentos conhecidos mundialmente, mesmo que não constem no trecho do FNM fornecido.
+1. INFORMAÇÕES GERAIS: Use a busca do Google para consultar fontes oficiais (OMS, MISAU).
+2. MEDICAMENTOS E TRATAMENTOS:
+   - FONTE PRIMÁRIA: Use o Formulário Nacional de Medicamentos (FNM) abaixo.
+   - FONTE SECUNDÁRIA: Use a busca do Google para diretrizes MISAU/OMS se não encontrar no FNM.
+   - OBRIGATÓRIO: Incluir dose, intervalo e duração.
+   - IDENTIFICAÇÃO: Indique se a fonte é "FNM Moçambique" ou "Diretrizes MISAU/OMS".
 
 TEXTO DO FORMULÁRIO NACIONAL DE MEDICAMENTOS (FNM):
 ${MEDICATION_FORM_TEXT}
-
-Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
 `;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
-        config: {
-          systemInstruction,
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              description: { type: Type.STRING },
-              symptoms: { type: Type.ARRAY, items: { type: Type.STRING } },
-              causes: { type: Type.ARRAY, items: { type: Type.STRING } },
-              diagnosis: { type: Type.ARRAY, items: { type: Type.STRING } },
-              treatment: { type: Type.ARRAY, items: { type: Type.STRING } },
-              medications: {
-                type: Type.ARRAY,
-                description: "Lista de medicamentos encontrados no FNM que são indicados para esta doença. DEVE ser um array, mesmo que vazio.",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING, description: "Nome do medicamento e apresentação (ex: DIGOXINA Comp. 0,25 mg)" },
-                    posology: { type: Type.STRING, description: "Doses e via de administração conforme o FNM" },
-                    contraindications: { type: Type.STRING, description: "Contraindicações conforme o FNM" }
-                  },
-                  required: ["name", "posology", "contraindications"]
-                }
-              },
-              complications: { type: Type.ARRAY, items: { type: Type.STRING } },
-              nursingCare: { type: Type.ARRAY, items: { type: Type.STRING } },
-              prevention: { type: Type.ARRAY, items: { type: Type.STRING } },
-              type: { type: Type.STRING, enum: ["Chronic", "Infectious", "Neurological"] }
-            },
-            required: ["name", "description", "symptoms", "treatment", "type", "medications"]
-          }
-        }
-      });
-    } catch (searchError) {
-      console.warn("Disease AI Search Grounding failed, falling back to standard generation", searchError);
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Estruture os dados da doença (com base no seu conhecimento): ${diseaseName}`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              description: { type: Type.STRING },
-              symptoms: { type: Type.ARRAY, items: { type: Type.STRING } },
-              causes: { type: Type.ARRAY, items: { type: Type.STRING } },
-              diagnosis: { type: Type.ARRAY, items: { type: Type.STRING } },
-              treatment: { type: Type.ARRAY, items: { type: Type.STRING } },
-              medications: {
-                type: Type.ARRAY,
-                description: "Lista de medicamentos conhecidos para esta doença.",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    posology: { type: Type.STRING },
-                    contraindications: { type: Type.STRING }
-                  },
-                  required: ["name", "posology", "contraindications"]
-                }
-              },
-              complications: { type: Type.ARRAY, items: { type: Type.STRING } },
-              nursingCare: { type: Type.ARRAY, items: { type: Type.STRING } },
-              prevention: { type: Type.ARRAY, items: { type: Type.STRING } },
-              type: { type: Type.STRING, enum: ["Chronic", "Infectious", "Neurological"] }
-            },
-            required: ["name", "description", "symptoms", "treatment", "type", "medications"]
-          }
-        }
-      });
-    }
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
+      config: {
+        systemInstruction,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: DISEASE_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      }
+    });
 
-    const disease = extractJSON(response.text || "null");
+    const disease = JSON.parse(response.text.trim());
     if (disease) {
       disease.id = disease.id || `ai-${Date.now()}`;
       disease.updatedAt = new Date().toISOString();
-      disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},disease,medical,health`;
+      disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},disease,medical`;
     }
     return disease;
   } catch (error) {
@@ -339,76 +243,30 @@ export async function searchProcedureAI(procedureName: string): Promise<Procedur
 Você é um instrutor de enfermagem moçambicano encarregado de fornecer guias passo a passo precisos sobre o procedimento "${procedureName}".
 
 DIRETRIZES DE PESQUISA:
-1. FONTE PRIMÁRIA: Você deve usar o Manual de Procedimentos Básicos de Enfermagem fornecido abaixo para a estrutura base.
-2. FONTE SECUNDÁRIA (INTERNET): Use a ferramenta de busca do Google para encontrar informações adicionais, clarificações, dicas práticas e evidências científicas recentes que complementem o manual.
-3. ESTRUTURA: Forneça um conceito claro, lista de materiais, passos detalhados e observações críticas.
+1. FONTE PRIMÁRIA: Use o Manual de Procedimentos Básicos de Enfermagem abaixo.
+2. FONTE SECUNDÁRIA: Use a busca do Google para informações adicionais e evidências recentes.
 
 MANUAL DE PROCEDIMENTOS BÁSICOS DE ENFERMAGEM:
 ${NURSING_MANUAL_TEXT}
-
-Você deve retornar os dados estruturados EXATAMENTE no formato JSON solicitado.
 `;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Pesquise na internet e no manual para fornecer os detalhes completos do procedimento: ${procedureName}`,
-        config: {
-          systemInstruction,
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              steps: { type: Type.NUMBER },
-              duration: { type: Type.STRING },
-              concept: { type: Type.STRING },
-              materials: { type: Type.ARRAY, items: { type: Type.STRING } },
-              procedureSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-              observations: { type: Type.ARRAY, items: { type: Type.STRING } },
-              icon: { type: Type.STRING }
-            },
-            required: ["name", "category", "concept", "materials", "procedureSteps"]
-          }
-        }
-      });
-    } catch (searchError) {
-      console.warn("Procedure AI Search Grounding failed, falling back to standard generation", searchError);
-      response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Forneça os detalhes completos do procedimento (com base no seu conhecimento e manual): ${procedureName}`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              steps: { type: Type.NUMBER },
-              duration: { type: Type.STRING },
-              concept: { type: Type.STRING },
-              materials: { type: Type.ARRAY, items: { type: Type.STRING } },
-              procedureSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-              observations: { type: Type.ARRAY, items: { type: Type.STRING } },
-              icon: { type: Type.STRING }
-            },
-            required: ["name", "category", "concept", "materials", "procedureSteps"]
-          }
-        }
-      });
-    }
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
+      config: {
+        systemInstruction,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: PROCEDURE_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      }
+    });
 
-    const procedure = extractJSON(response.text || "null");
+    const procedure = JSON.parse(response.text.trim());
     if (procedure) {
       procedure.id = procedure.id || `proc-${Date.now()}`;
       procedure.icon = procedure.icon || 'Activity';
-      procedure.steps = procedure.procedureSteps.length;
+      procedure.steps = procedure.procedureSteps?.length || 0;
       procedure.duration = procedure.duration || '15 min';
       procedure.guideCount = 1;
     }

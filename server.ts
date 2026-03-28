@@ -68,22 +68,32 @@ async function startServer() {
         });
 
       if (upsertError) {
-        console.error("Error storing pending subscription:", JSON.stringify(upsertError, null, 2));
-        let message = "Não foi possível guardar os detalhes da subscrição no banco de dados.";
+        console.error("Error storing pending subscription:", upsertError);
         
-        if (upsertError.code === '42703') {
-          message = "A tabela 'profiles' está em falta com as colunas 'pending_plan' ou 'pending_days'. Por favor, execute este SQL no Supabase: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pending_plan TEXT, ADD COLUMN IF NOT EXISTS pending_days INTEGER;";
-          console.error("CRITICAL: The 'profiles' table is missing pending subscription columns!");
-        } else if (upsertError.code === '42P01') {
-          message = "A tabela 'profiles' não existe no Supabase.";
-        }
+        // If it's a dev user or a foreign key error, we might want to continue 
+        // but warn the user that the webhook might fail if the profile doesn't exist.
+        const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
+        
+        if (isDevUser || upsertError.code === '23503' || upsertError.code === '22P02') {
+          console.warn("Database storage failed but continuing (Dev mode or missing profile):", upsertError.message);
+          // We continue to allow the payment flow to be tested
+        } else {
+          let message = "Não foi possível guardar os detalhes da subscrição no banco de dados.";
+          
+          if (upsertError.code === '42703') {
+            message = "A tabela 'profiles' está em falta com as colunas 'pending_plan' ou 'pending_days'. Por favor, execute este SQL no Supabase: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pending_plan TEXT, ADD COLUMN IF NOT EXISTS pending_days INTEGER;";
+            console.error("CRITICAL: The 'profiles' table is missing pending subscription columns!");
+          } else if (upsertError.code === '42P01') {
+            message = "A tabela 'profiles' não existe no Supabase.";
+          }
 
-        return res.status(500).json({ 
-          error: "Erro de Base de Dados", 
-          message: message,
-          details: upsertError.message,
-          code: upsertError.code
-        });
+          return res.status(500).json({ 
+            error: "Erro de Base de Dados", 
+            message: message,
+            details: upsertError.message,
+            code: upsertError.code
+          });
+        }
       }
 
       // Construct the payment request body matching the example
@@ -91,7 +101,7 @@ async function startServer() {
         amount: parseFloat(amount).toFixed(2),
         reference,
         description: `Subscrição Biblioteca da Saúde - Plano ${planId}`,
-        return_url: `${APP_URL}?payment=success`,
+        return_url: `${APP_URL}/payment/callback`,
         callback_url: PAYSUITE_CALLBACK_URL,
       };
 
@@ -134,6 +144,25 @@ async function startServer() {
     }
   });
 
+  // Payment callback route to handle external redirects in an iframe
+  app.get("/payment/callback", (req, res) => {
+    res.send(`
+      <html>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'PAYMENT_SUCCESS' }, '*');
+              window.close();
+            } else {
+              window.location.href = '/?payment=success';
+            }
+          </script>
+          <p>Pagamento processado com sucesso. Esta janela fechará automaticamente.</p>
+        </body>
+      </html>
+    `);
+  });
+
   // Webhook endpoint for Paysuite
   app.post("/webhook", express.json(), async (req, res) => {
     try {
@@ -169,11 +198,19 @@ async function startServer() {
       }
 
       // Extract userId from reference (format: userId-timestampSuffix)
-      const userId = reference.split("-")[0];
+      // Since UUIDs contain hyphens, we split by the last hyphen which is our timestamp suffix
+      const lastHyphenIndex = reference.lastIndexOf("-");
+      const userId = lastHyphenIndex !== -1 ? reference.substring(0, lastHyphenIndex) : reference;
       
       if (!userId) {
         console.error("Could not extract userId from reference:", reference);
         return res.status(400).json({ error: "Invalid reference" });
+      }
+
+      // Handle dev user gracefully
+      if (userId === '00000000-0000-0000-0000-000000000000') {
+        console.log("Dev user payment success - skipping database update");
+        return res.json({ status: "ok", message: "Dev user handled" });
       }
 
       // Fetch the pending subscription details from the profile
