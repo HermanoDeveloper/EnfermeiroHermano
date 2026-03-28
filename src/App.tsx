@@ -122,7 +122,7 @@ export default function App() {
       
       // Refresh profile to show new subscription
       setTimeout(() => {
-        fetchProfile();
+        fetchProfile().catch(err => console.error("Error fetching profile in timeout:", err));
       }, 2000);
     }
   }, []);
@@ -361,8 +361,8 @@ export default function App() {
   // Fetch Profile
   useEffect(() => {
     if (session?.user) {
-      fetchProfile();
-      fetchHistory();
+      fetchProfile().catch(err => console.error("Error fetching profile in effect:", err));
+      fetchHistory().catch(err => console.error("Error fetching history in effect:", err));
     } else {
       setProfile(null);
       setRecentHistory([]);
@@ -417,7 +417,7 @@ export default function App() {
   // Fetch Data
   useEffect(() => {
     if (isLoggedIn) {
-      fetchData();
+      fetchData().catch(err => console.error("Error fetching data in effect:", err));
     }
   }, [isLoggedIn]);
 
@@ -3358,7 +3358,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
       }
       if (event.data?.type === 'PAYMENT_SUCCESS') {
         setStatus('success');
-        onRefreshProfile();
+        onRefreshProfile().catch(err => console.error('Error refreshing profile after payment success:', err));
         setTimeout(() => {
           onBack();
         }, 2000);
@@ -3441,48 +3441,36 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         return;
       }
 
-      // For mobile money, we might just wait for the webhook or show a message
-      // In this simulation/dev mode, we can still trigger the simulated webhook if needed
-      // but for "real" flow we would show "Check your phone"
-      
-      if (isDevEnv) {
-        console.log('Dev mode: Simulating webhook success...');
-        const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
-        const reference = `${userId}-${Date.now().toString().slice(-8)}`;
+      // For e2Payments STK push (mobile money)
+      if (result.status === "success") {
+        setStatus('processing');
+        setErrorMessage('Pedido enviado para o seu telemóvel. Por favor, confirme o pagamento introduzindo o seu PIN no seu telemóvel.');
         
-        await fetch('/webhook', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-webhook-signature': 'simulated_signature'
-          },
-          body: JSON.stringify({
-            event: 'payment.success',
-            data: {
-              reference,
-              amount: selectedPlan.amount
+        // In dev mode, we can still simulate success after a delay
+        if (isDevEnv) {
+          setTimeout(async () => {
+            console.log('Dev mode: Simulating payment success...');
+            setStatus('success');
+            try {
+              await onRefreshProfile();
+            } catch (err) {
+              console.error('Error refreshing profile in dev mode:', err);
             }
-          })
-        });
-        
-        setStatus('success');
-        await onRefreshProfile();
-        setTimeout(() => {
-          onBack();
-        }, 2000);
-      } else {
-        // Real flow: show instructions
-        setStatus('success'); // Or a new state like 'waiting'
-        // For now, let's just refresh profile after a delay to see if webhook worked
-        setTimeout(async () => {
-          try {
-            await onRefreshProfile();
-            onBack();
-          } catch (err) {
-            console.error('Error refreshing profile after subscription:', err);
-            onBack(); // Still go back even if refresh fails
-          }
-        }, 5000);
+            setTimeout(() => onBack(), 2000);
+          }, 5000);
+        } else {
+          // Real flow: show instructions and wait for webhook
+          // We can poll here or just let the user know it's processing
+          setTimeout(async () => {
+            try {
+              await onRefreshProfile();
+              // If profile is updated, we can go back
+            } catch (err) {
+              console.error('Error refreshing profile after subscription:', err);
+            }
+          }, 10000);
+        }
+        return;
       }
     } catch (error: any) {
       console.error('Subscription error:', error);

@@ -22,6 +22,45 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+let e2Token: string | null = null;
+let e2TokenExpiry: number = 0;
+
+async function getE2Token() {
+  const now = Date.now();
+  if (e2Token && now < e2TokenExpiry) {
+    return e2Token;
+  }
+
+  const clientId = process.env.E2PAYMENTS_CLIENT_ID;
+  const clientSecret = process.env.E2PAYMENTS_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("e2Payments credentials missing (E2PAYMENTS_CLIENT_ID or E2PAYMENTS_CLIENT_SECRET)");
+  }
+
+  const response = await fetch('https://e2payments.explicador.co.mz/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error("e2Payments token error:", errorData);
+    throw new Error(`Failed to get e2Payments token: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  e2Token = `${data.token_type} ${data.access_token}`;
+  // Token expires in data.expires_in seconds. Buffer by 60 seconds.
+  e2TokenExpiry = now + (data.expires_in - 60) * 1000;
+  return e2Token;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -40,104 +79,115 @@ async function startServer() {
       return res.status(400).json({ error: "Campos obrigatórios em falta" });
     }
 
-    const PAYSUITE_API_KEY = process.env.PAYSUITE_API_KEY;
+    const E2_CLIENT_ID = process.env.E2PAYMENTS_CLIENT_ID;
     const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
-    const PAYSUITE_CALLBACK_URL = process.env.PAYSUITE_CALLBACK_URL || `${APP_URL}/webhook`;
 
-    if (!PAYSUITE_API_KEY || PAYSUITE_API_KEY.trim() === "") {
-      console.error("PAYSUITE_API_KEY is not configured in environment variables");
+    if (!E2_CLIENT_ID) {
+      console.error("E2PAYMENTS_CLIENT_ID is not configured");
       return res.status(500).json({ 
         error: "Configuração Incompleta", 
-        message: "A chave de API da PaySuite não está configurada no servidor. Por favor, adicione PAYSUITE_API_KEY às variáveis de ambiente." 
+        message: "As credenciais da e2Payments não estão configuradas. Por favor, adicione E2PAYMENTS_CLIENT_ID às variáveis de ambiente." 
       });
     }
 
-    // Construct a reference that fits in 50 characters (PaySuite limit)
-    // Format: userId (36) + "-" (1) + timestamp_suffix (8) = 45 characters
-    const reference = `${userId}-${Date.now().toString().slice(-8)}`;
+    // Determine wallet ID based on method
+    let walletId = "";
+    if (method === 'emola') walletId = process.env.E2PAYMENTS_EMOLA_WALLET_ID || "";
+    else if (method === 'mpesa') walletId = process.env.E2PAYMENTS_MPESA_WALLET_ID || "";
+    else if (method === 'mkesh') walletId = process.env.E2PAYMENTS_MKESH_WALLET_ID || "";
+
+    if (!walletId && method !== 'card') {
+      console.error(`Wallet ID missing for method: ${method}`);
+      return res.status(400).json({ error: "Carteira não configurada para este método de pagamento" });
+    }
+
+    // Construct a reference (alphanumeric only for safety)
+    const cleanUserId = userId.replace(/-/g, "");
+    const reference = `${cleanUserId}${Date.now()}`.substring(0, 50);
 
     try {
+      const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
+      
       // Store pending subscription details in the profile
-      // We use upsert to ensure the profile exists and store the pending info
-      const { error: upsertError } = await supabase
-        .from("profiles")
-        .upsert({
-          id: userId,
-          pending_plan: planId,
-          pending_days: durationDays
-        });
-
-      if (upsertError) {
-        console.error("Error storing pending subscription:", upsertError);
-        
-        // If it's a dev user or a foreign key error, we might want to continue 
-        // but warn the user that the webhook might fail if the profile doesn't exist.
-        const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
-        
-        if (isDevUser || upsertError.code === '23503' || upsertError.code === '22P02') {
-          console.warn("Database storage failed but continuing (Dev mode or missing profile):", upsertError.message);
-          // We continue to allow the payment flow to be tested
-        } else {
-          let message = "Não foi possível guardar os detalhes da subscrição no banco de dados.";
-          
-          if (upsertError.code === '42703') {
-            message = "A tabela 'profiles' está em falta com as colunas 'pending_plan' ou 'pending_days'. Por favor, execute este SQL no Supabase: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pending_plan TEXT, ADD COLUMN IF NOT EXISTS pending_days INTEGER;";
-            console.error("CRITICAL: The 'profiles' table is missing pending subscription columns!");
-          } else if (upsertError.code === '42P01') {
-            message = "A tabela 'profiles' não existe no Supabase.";
-          }
-
-          return res.status(500).json({ 
-            error: "Erro de Base de Dados", 
-            message: message,
-            details: upsertError.message,
-            code: upsertError.code
+      if (!isDevUser) {
+        const { error: upsertError } = await supabase
+          .from("profiles")
+          .upsert({
+            id: userId,
+            pending_plan: planId,
+            pending_days: durationDays
           });
+
+        if (upsertError) {
+          console.error("Error storing pending subscription:", upsertError);
+          if (upsertError.code === '23503' || upsertError.code === '22P02') {
+            console.warn("Database storage failed but continuing:", upsertError.message);
+          } else {
+            return res.status(500).json({ error: "Erro de Base de Dados", details: upsertError.message });
+          }
         }
       }
 
-      // Construct the payment request body matching the example
-      const paymentBody: any = {
-        amount: parseFloat(amount).toFixed(2),
-        reference,
-        description: `Subscrição Biblioteca da Saúde - Plano ${planId}`,
-        return_url: `${APP_URL}/payment/callback`,
-        callback_url: PAYSUITE_CALLBACK_URL,
-      };
-
-      // If method is provided and not 'card', we can try to pass it, 
-      // but the example didn't show it, so we'll make it optional
-      if (method && method !== 'card') {
-        paymentBody.method = method === 'mpesa' ? 'mpesa' : (method === 'mkesh' ? 'mkesh' : (method === 'emola' ? 'emola' : method));
-        if (phone) {
-          paymentBody.phone = phone;
-        }
+      // Get e2Payments token
+      let token;
+      try {
+        token = await getE2Token();
+      } catch (tokenErr: any) {
+        return res.status(500).json({ error: "Erro de Autenticação", message: tokenErr.message });
       }
 
-      const response = await fetch("https://paysuite.tech/api/v1/payments", {
+      // Construct endpoint
+      // Pattern: https://e2payments.explicador.co.mz/v1/payments/{method}/c2b
+      const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'mkesh' ? 'mkesh' : 'emola');
+      const endpoint = `https://e2payments.explicador.co.mz/v1/payments/${paymentMethod}/c2b`;
+
+      // e2Payments usually expects 9 digits for mobile money in Mozambique (e.g., 84XXXXXXX)
+      // The tutorial shows "phone": "86XXXXXXX"
+      const formattedPhone = phone.replace(/\D/g, '').slice(-9);
+
+      console.log(`Initiating ${paymentMethod} payment for ${formattedPhone} (Wallet: ${walletId}) at ${endpoint}`);
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${PAYSUITE_API_KEY.trim()}`,
+          "Authorization": token,
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify(paymentBody),
+        body: JSON.stringify({
+          client_id: E2_CLIENT_ID,
+          amount: Number(amount),
+          phone: formattedPhone,
+          reference: reference,
+          wallet_id: walletId,
+          description: `Subscrição ${planId}`
+        }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error("PaySuite API error:", JSON.stringify(data, null, 2));
-        if (response.status === 401) {
-          return res.status(401).json({ 
-            error: "Erro de Autenticação na PaySuite", 
-            message: "A chave de API da PaySuite (PAYSUITE_API_KEY) é inválida ou não foi configurada corretamente nas definições do projeto." 
-          });
-        }
-        return res.status(response.status).json(data);
+      let data;
+      const responseText = await response.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("e2Payments non-JSON response:", responseText);
+        return res.status(500).json({ error: "Erro na API de Pagamentos", message: "A API retornou uma resposta inválida." });
       }
 
-      res.json(data);
+      if (!response.ok) {
+        console.error("e2Payments API error:", JSON.stringify(data, null, 2));
+        return res.status(response.status).json({
+          error: "Erro no Pagamento",
+          message: data.message || "A API de pagamentos recusou o pedido.",
+          details: data.errors || data
+        });
+      }
+
+      // e2Payments response usually indicates if the request was sent to the phone
+      res.json({
+        status: "success",
+        message: "Pedido de pagamento enviado para o telemóvel",
+        data: data
+      });
     } catch (error) {
       console.error("Failed to create payment:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -163,120 +213,103 @@ async function startServer() {
     `);
   });
 
-  // Webhook endpoint for Paysuite
+  // Webhook endpoint for payment notifications
   app.post("/webhook", express.json(), async (req, res) => {
     try {
-      const signature = req.headers["x-webhook-signature"] as string;
-    const secret = process.env.PAYSUITE_WEBHOOK_SECRET;
+      const event = req.body;
+      console.log("Received Payment Webhook:", JSON.stringify(event, null, 2));
 
-    if (secret && signature) {
-      const hmac = crypto.createHmac("sha256", secret);
-      const body = JSON.stringify(req.body);
-      const digest = hmac.update(body).digest("hex");
-
-      if (digest !== signature) {
-        console.error("Invalid webhook signature:", { signature, digest });
-        return res.status(401).json({ error: "Invalid signature" });
-      }
-    } else if (secret && !signature) {
-      console.warn("Webhook secret configured but no signature received");
-    }
-
-    const event = req.body;
-
-    console.log("Received Paysuite Webhook:", JSON.stringify(event, null, 2));
-
-    // PaySuite uses 'event' field in documentation
-    const eventType = event.event || event.type;
-
-    if (eventType === "payment.success") {
-      const { reference, amount } = event.data;
+      // Try to extract reference and status from various possible formats
+      const reference = event.reference || (event.data && event.data.reference);
+      const status = event.status || event.event || (event.data && event.data.status);
       
-      if (!reference) {
-        console.error("Missing reference in webhook data");
-        return res.status(400).json({ error: "Missing reference" });
-      }
+      const isSuccess = status === 'completed' || status === 'payment.success' || status === 'success';
 
-      // Extract userId from reference (format: userId-timestampSuffix)
-      // Since UUIDs contain hyphens, we split by the last hyphen which is our timestamp suffix
-      const lastHyphenIndex = reference.lastIndexOf("-");
-      const userId = lastHyphenIndex !== -1 ? reference.substring(0, lastHyphenIndex) : reference;
-      
-      if (!userId) {
-        console.error("Could not extract userId from reference:", reference);
-        return res.status(400).json({ error: "Invalid reference" });
-      }
+      if (isSuccess && reference) {
+        // Extract userId from reference (format: cleanedUserId(32) + timestamp(13))
+        if (reference.length < 32) {
+          console.error("Invalid reference length in webhook data:", reference);
+          return res.status(400).json({ error: "Invalid reference" });
+        }
 
-      // Handle dev user gracefully
-      if (userId === '00000000-0000-0000-0000-000000000000') {
-        console.log("Dev user payment success - skipping database update");
-        return res.json({ status: "ok", message: "Dev user handled" });
-      }
-
-      // Fetch the pending subscription details from the profile
-      const { data: profile, error: fetchError } = await supabase
-        .from("profiles")
-        .select("pending_plan, pending_days")
-        .eq("id", userId)
-        .single();
-
-      if (fetchError || !profile || !profile.pending_plan) {
-        console.error("Could not find pending subscription for user:", userId, fetchError);
-        return res.status(404).json({ error: "Pending subscription not found" });
-      }
-
-      const planId = profile.pending_plan;
-      const durationDays = profile.pending_days;
-
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + durationDays);
-
-      console.log(`Updating subscription for user ${userId} to plan ${planId} until ${expiryDate.toISOString()} (Amount: ${amount})`);
-
-      // Update the profile with active subscription and clear pending info
-      const { data, error } = await supabase
-        .from("profiles")
-        .update({
-          subscription_status: "active",
-          subscription_expiry: expiryDate.toISOString(),
-          subscription_plan: planId,
-          pending_plan: null,
-          pending_days: null
-        })
-        .eq("id", userId)
-        .select();
-
-      if (error) {
-        console.error("Supabase Error updating subscription:", JSON.stringify(error, null, 2));
+        const cleanUserId = reference.substring(0, 32);
         
-        if (error.code === '42703') {
-          console.error("CRITICAL: The 'profiles' table is missing subscription columns!");
-          console.log("Please run the following SQL in your Supabase SQL Editor:");
-          console.log(`
-            ALTER TABLE profiles 
-            ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trial',
-            ADD COLUMN IF NOT EXISTS subscription_expiry TIMESTAMPTZ,
-            ADD COLUMN IF NOT EXISTS subscription_plan TEXT,
-            ADD COLUMN IF NOT EXISTS pending_plan TEXT,
-            ADD COLUMN IF NOT EXISTS pending_days INTEGER;
-          `);
-        }
- else if (error.code === '42P01') {
-          console.error("CRITICAL: The 'profiles' table does not exist!");
-          console.log("Please create the 'profiles' table in your Supabase SQL Editor.");
+        // Reconstruct UUID format (8-4-4-4-12)
+        const userId = [
+          cleanUserId.substring(0, 8),
+          cleanUserId.substring(8, 12),
+          cleanUserId.substring(12, 16),
+          cleanUserId.substring(16, 20),
+          cleanUserId.substring(20)
+        ].join("-");
+        
+        if (!userId || userId.length !== 36) {
+          console.error("Could not reconstruct userId from reference:", reference);
+          return res.status(400).json({ error: "Invalid reference" });
         }
 
-        return res.status(500).json({ 
-          error: "Failed to update subscription", 
-          details: error.message,
-          code: error.code
-        });
+        console.log(`Processing successful payment for user: ${userId}`);
+
+        // Handle dev user gracefully
+        if (userId === '00000000-0000-0000-0000-000000000000') {
+          console.log("Dev user payment success - skipping database update");
+          return res.json({ status: "ok", message: "Dev user handled" });
+        }
+
+        // Fetch the pending subscription details from the profile
+        const { data: profile, error: fetchError } = await supabase
+          .from("profiles")
+          .select("pending_plan, pending_days")
+          .eq("id", userId)
+          .single();
+
+        if (fetchError || !profile || !profile.pending_plan) {
+          console.error("Could not find pending subscription for user:", userId, fetchError);
+          return res.status(404).json({ error: "Pending subscription not found" });
+        }
+
+        const planId = profile.pending_plan;
+        const durationDays = profile.pending_days;
+
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
+
+        console.log(`Updating subscription for user ${userId} to plan ${planId} until ${expiryDate.toISOString()}`);
+
+        // Update the profile with active subscription and clear pending info
+        const { data, error } = await supabase
+          .from("profiles")
+          .update({
+            subscription_status: "active",
+            subscription_expiry: expiryDate.toISOString(),
+            subscription_plan: planId,
+            pending_plan: null,
+            pending_days: null
+          })
+          .eq("id", userId)
+          .select();
+
+        if (error) {
+          console.error("Supabase Error updating subscription:", JSON.stringify(error, null, 2));
+          
+          if (error.code === '42703') {
+            console.error("CRITICAL: The 'profiles' table is missing subscription columns!");
+          } else if (error.code === '42P01') {
+            console.error("CRITICAL: The 'profiles' table does not exist!");
+          }
+
+          return res.status(500).json({ 
+            error: "Failed to update subscription", 
+            details: error.message,
+            code: error.code
+          });
+        }
+
+        console.log("Subscription updated successfully:", data);
+        return res.status(200).json({ status: "success" });
       }
 
-      console.log("Subscription updated successfully:", data);
-    }
-
-    res.json({ received: true });
+      res.json({ received: true });
     } catch (error) {
       console.error("Error processing webhook:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -300,11 +333,8 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    if (!process.env.PAYSUITE_API_KEY) {
-      console.warn("WARNING: PAYSUITE_API_KEY is not set. Payments will not work.");
-    }
-    if (!process.env.PAYSUITE_WEBHOOK_SECRET) {
-      console.warn("WARNING: PAYSUITE_WEBHOOK_SECRET is not set. Webhooks will not be verified.");
+    if (!process.env.E2PAYMENTS_CLIENT_ID) {
+      console.warn("WARNING: E2PAYMENTS_CLIENT_ID is not set. Payments will not work.");
     }
   });
 }
