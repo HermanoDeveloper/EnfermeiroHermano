@@ -26,8 +26,13 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Health check route
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // API route to create a payment request
-  app.post("/api/create-payment", express.json(), async (req, res) => {
+  app.post("/api/v1/payments", express.json(), async (req, res) => {
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
     if (!amount || !userId || !planId || !durationDays) {
@@ -81,6 +86,24 @@ async function startServer() {
         });
       }
 
+      // Construct the payment request body matching the example
+      const paymentBody: any = {
+        amount: parseFloat(amount).toFixed(2),
+        reference,
+        description: `Subscrição Biblioteca da Saúde - Plano ${planId}`,
+        return_url: `${APP_URL}?payment=success`,
+        callback_url: PAYSUITE_CALLBACK_URL,
+      };
+
+      // If method is provided and not 'card', we can try to pass it, 
+      // but the example didn't show it, so we'll make it optional
+      if (method && method !== 'card') {
+        paymentBody.method = method === 'mpesa' ? 'mpesa' : (method === 'mkesh' ? 'mkesh' : (method === 'emola' ? 'emola' : method));
+        if (phone) {
+          paymentBody.phone = phone;
+        }
+      }
+
       const response = await fetch("https://paysuite.tech/api/v1/payments", {
         method: "POST",
         headers: {
@@ -88,13 +111,7 @@ async function startServer() {
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify({
-          amount: parseFloat(amount),
-          method: method === 'card' ? 'credit_card' : method,
-          reference,
-          description: `Subscrição Biblioteca da Saúde - Plano ${planId}`,
-          callback_url: PAYSUITE_CALLBACK_URL,
-        }),
+        body: JSON.stringify(paymentBody),
       });
 
       const data = await response.json();
@@ -119,7 +136,8 @@ async function startServer() {
 
   // Webhook endpoint for Paysuite
   app.post("/webhook", express.json(), async (req, res) => {
-    const signature = req.headers["x-webhook-signature"] as string;
+    try {
+      const signature = req.headers["x-webhook-signature"] as string;
     const secret = process.env.PAYSUITE_WEBHOOK_SECRET;
 
     if (secret && signature) {
@@ -222,6 +240,10 @@ async function startServer() {
     }
 
     res.json({ received: true });
+    } catch (error) {
+      console.error("Error processing webhook:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   // Vite middleware for development
@@ -250,4 +272,6 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Failed to start server:", error);
+});

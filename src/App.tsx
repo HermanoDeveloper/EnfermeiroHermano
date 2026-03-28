@@ -106,8 +106,24 @@ export default function App() {
   const [isEnhancingProcedure, setIsEnhancingProcedure] = useState(false);
   const [isSelectingProcedureAI, setIsSelectingProcedureAI] = useState<string | null>(null);
   const [recentHistory, setRecentHistory] = useState<any[]>([]);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const isSpecialUser = profile?.email === 'hermanosaia01@gmail.com';
   const isDev = isDevEnv || isSpecialUser;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      setPaymentSuccess(true);
+      setCurrentScreen('profile');
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Refresh profile to show new subscription
+      setTimeout(() => {
+        fetchProfile();
+      }, 2000);
+    }
+  }, []);
 
   const fetchHistory = async () => {
     if (!session?.user?.id) return;
@@ -582,18 +598,25 @@ export default function App() {
       case 'subscription':
         return <SubscriptionScreen onBack={() => setCurrentScreen('home')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
       case 'profile':
-        return <ProfileScreen profile={profile} onNavigate={setCurrentScreen} onLogout={async () => { 
-          try {
-            await supabase.auth.signOut(); 
-            setIsLoggedIn(false); 
-            setCurrentScreen('login'); 
-          } catch (err) {
-            console.error('Error during logout:', err);
-            // Force logout anyway
-            setIsLoggedIn(false);
-            setCurrentScreen('login');
-          }
-        }} onRefreshProfile={fetchProfile} />;
+        return <ProfileScreen 
+          profile={profile} 
+          onNavigate={setCurrentScreen} 
+          onLogout={async () => { 
+            try {
+              await supabase.auth.signOut(); 
+              setIsLoggedIn(false); 
+              setCurrentScreen('login'); 
+            } catch (err) {
+              console.error('Error during logout:', err);
+              // Force logout anyway
+              setIsLoggedIn(false);
+              setCurrentScreen('login');
+            }
+          }} 
+          onRefreshProfile={fetchProfile} 
+          paymentSuccess={paymentSuccess}
+          onClearPaymentSuccess={() => setPaymentSuccess(false)}
+        />;
       case 'disease-detail':
         return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
       case 'procedure-detail':
@@ -2650,7 +2673,7 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
   );
 }
 
-function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate }: { profile: any, onLogout: () => void, onRefreshProfile: () => Promise<void>, onNavigate: (s: Screen) => void }) {
+function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymentSuccess, onClearPaymentSuccess }: { profile: any, onLogout: () => void, onRefreshProfile: () => Promise<void>, onNavigate: (s: Screen) => void, paymentSuccess?: boolean, onClearPaymentSuccess?: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2668,6 +2691,13 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate }: { pr
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (paymentSuccess) {
+      setMessage({ type: 'success', text: 'Pagamento concluído com sucesso! Sua subscrição está ativa.' });
+      if (onClearPaymentSuccess) onClearPaymentSuccess();
+    }
+  }, [paymentSuccess]);
 
   useEffect(() => {
     if (profile) {
@@ -3307,7 +3337,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     try {
       setErrorMessage(null);
       // Call our backend to create the payment request
-      const response = await fetch('/api/create-payment', {
+      const response = await fetch('/api/v1/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
