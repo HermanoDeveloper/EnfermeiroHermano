@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ async function startServer() {
 
     const PAYSUITE_API_KEY = process.env.PAYSUITE_API_KEY;
     const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
+    const PAYSUITE_CALLBACK_URL = process.env.PAYSUITE_CALLBACK_URL || `${APP_URL}/webhook`;
 
     if (!PAYSUITE_API_KEY || PAYSUITE_API_KEY.trim() === "") {
       console.error("PAYSUITE_API_KEY is not configured in environment variables");
@@ -91,7 +93,7 @@ async function startServer() {
           method: method === 'card' ? 'credit_card' : method,
           reference,
           description: `Subscrição Biblioteca da Saúde - Plano ${planId}`,
-          callback_url: `${APP_URL}/webhook`,
+          callback_url: PAYSUITE_CALLBACK_URL,
         }),
       });
 
@@ -117,10 +119,22 @@ async function startServer() {
 
   // Webhook endpoint for Paysuite
   app.post("/webhook", express.json(), async (req, res) => {
-    const signature = req.headers["x-webhook-signature"];
+    const signature = req.headers["x-webhook-signature"] as string;
     const secret = process.env.PAYSUITE_WEBHOOK_SECRET;
 
-    // In a real app, verify the signature here
+    if (secret && signature) {
+      const hmac = crypto.createHmac("sha256", secret);
+      const body = JSON.stringify(req.body);
+      const digest = hmac.update(body).digest("hex");
+
+      if (digest !== signature) {
+        console.error("Invalid webhook signature:", { signature, digest });
+        return res.status(401).json({ error: "Invalid signature" });
+      }
+    } else if (secret && !signature) {
+      console.warn("Webhook secret configured but no signature received");
+    }
+
     const event = req.body;
 
     console.log("Received Paysuite Webhook:", JSON.stringify(event, null, 2));
