@@ -40,7 +40,10 @@ async function getE2Token() {
 
   const response = await fetch('https://e2payments.explicador.co.mz/oauth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
     body: JSON.stringify({
       grant_type: 'client_credentials',
       client_id: clientId,
@@ -90,20 +93,22 @@ async function startServer() {
       });
     }
 
-    // Determine wallet ID based on method
-    let walletId = "";
-    if (method === 'emola') walletId = process.env.E2PAYMENTS_EMOLA_WALLET_ID || "";
-    else if (method === 'mpesa') walletId = process.env.E2PAYMENTS_MPESA_WALLET_ID || "";
-    else if (method === 'mkesh') walletId = process.env.E2PAYMENTS_MKESH_WALLET_ID || "";
+    // Determine wallet ID based on method or use generic one
+    let walletId = process.env.E2PAYMENTS_WALLET_ID || "";
+    if (!walletId) {
+      if (method === 'emola') walletId = process.env.E2PAYMENTS_EMOLA_WALLET_ID || "";
+      else if (method === 'mpesa') walletId = process.env.E2PAYMENTS_MPESA_WALLET_ID || "";
+      else if (method === 'mkesh') walletId = process.env.E2PAYMENTS_MKESH_WALLET_ID || "";
+    }
 
     if (!walletId && method !== 'card') {
       console.error(`Wallet ID missing for method: ${method}`);
-      return res.status(400).json({ error: "Carteira não configurada para este método de pagamento" });
+      return res.status(400).json({ error: "Configuração da carteira incompleta." });
     }
 
-    // Construct a reference (alphanumeric only for safety)
+    // Construct a reference (alphanumeric only for safety, no spaces as per user snippet)
     const cleanUserId = userId.replace(/-/g, "");
-    const reference = `${cleanUserId}${Date.now()}`.substring(0, 50);
+    const reference = `${cleanUserId}${Date.now()}`.substring(0, 50).replace(/\s+/g, '');
 
     try {
       const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
@@ -136,16 +141,25 @@ async function startServer() {
         return res.status(500).json({ error: "Erro de Autenticação", message: tokenErr.message });
       }
 
-      // Construct endpoint
-      // Pattern: https://e2payments.explicador.co.mz/v1/payments/{method}/c2b
-      const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'mkesh' ? 'mkesh' : 'emola');
-      const endpoint = `https://e2payments.explicador.co.mz/v1/payments/${paymentMethod}/c2b`;
+      // Construct endpoint based on user's provided snippet pattern
+      // Pattern: https://e2payments.explicador.co.mz/v1/c2b/{method}-payment/{walletId}
+      const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
+      const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
 
       // e2Payments usually expects 9 digits for mobile money in Mozambique (e.g., 84XXXXXXX)
-      // The tutorial shows "phone": "86XXXXXXX"
       const formattedPhone = phone.replace(/\D/g, '').slice(-9);
 
       console.log(`Initiating ${paymentMethod} payment for ${formattedPhone} (Wallet: ${walletId}) at ${endpoint}`);
+
+      // Construct payload according to official e2Payments documentation
+      const payload = {
+        client_id: E2_CLIENT_ID,
+        amount: amount.toString(),
+        phone: phone.replace(/\D/g, ''), // Ensure only digits
+        reference: reference.substring(0, 27)
+      };
+      
+      console.log("Sending payload to e2Payments (v2):", JSON.stringify(payload));
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -154,14 +168,7 @@ async function startServer() {
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify({
-          client_id: E2_CLIENT_ID,
-          amount: Number(amount),
-          phone: formattedPhone,
-          reference: reference,
-          wallet_id: walletId,
-          description: `Subscrição ${planId}`
-        }),
+        body: JSON.stringify(payload),
       });
 
       let data;
@@ -174,7 +181,7 @@ async function startServer() {
       }
 
       if (!response.ok) {
-        console.error("e2Payments API error:", JSON.stringify(data, null, 2));
+        console.error("FULL e2Payments API error response:", JSON.stringify(data, null, 2));
         return res.status(response.status).json({
           error: "Erro no Pagamento",
           message: data.message || "A API de pagamentos recusou o pedido.",
