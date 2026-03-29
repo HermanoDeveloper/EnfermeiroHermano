@@ -107,7 +107,14 @@ async function startServer() {
     }
 
     // Construct a unique reference (max 27 chars)
-    const reference = `ref${Date.now()}${Math.floor(Math.random() * 10000)}`.substring(0, 27);
+    // Encode UUID (32 hex -> 22 base64) + random suffix
+    const cleanId = userId.replace(/-/g, '');
+    const encodedId = Buffer.from(cleanId, 'hex').toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const suffix = Math.random().toString(36).substring(2, 7);
+    const reference = (encodedId + suffix).substring(0, 27);
 
     try {
       const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
@@ -232,22 +239,26 @@ async function startServer() {
       const isSuccess = status === 'completed' || status === 'payment.success' || status === 'success';
 
       if (isSuccess && reference) {
-        // Extract userId from reference (format: cleanedUserId(32) + timestamp(13))
-        if (reference.length < 32) {
-          console.error("Invalid reference length in webhook data:", reference);
-          return res.status(400).json({ error: "Invalid reference" });
+        // Extract userId from reference (first 22 chars are base64 encoded UUID)
+        let userId = "";
+        try {
+          const encodedId = reference.substring(0, 22);
+          let base64 = encodedId.replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const hex = Buffer.from(base64, 'base64').toString('hex');
+          
+          // Reconstruct UUID format (8-4-4-4-12)
+          userId = [
+            hex.substring(0, 8),
+            hex.substring(8, 12),
+            hex.substring(12, 16),
+            hex.substring(16, 20),
+            hex.substring(20)
+          ].join("-");
+        } catch (e) {
+          console.error("Error decoding userId from reference:", reference, e);
+          return res.status(400).json({ error: "Invalid reference format" });
         }
-
-        const cleanUserId = reference.substring(0, 32);
-        
-        // Reconstruct UUID format (8-4-4-4-12)
-        const userId = [
-          cleanUserId.substring(0, 8),
-          cleanUserId.substring(8, 12),
-          cleanUserId.substring(12, 16),
-          cleanUserId.substring(16, 20),
-          cleanUserId.substring(20)
-        ].join("-");
         
         if (!userId || userId.length !== 36) {
           console.error("Could not reconstruct userId from reference:", reference);

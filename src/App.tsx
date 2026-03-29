@@ -3560,16 +3560,18 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
               <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Método de Pagamento</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { id: 'mpesa', name: 'M-Pesa', color: 'bg-[#E61C25]' },
-                  { id: 'mkesh', name: 'M-Kesh', color: 'bg-[#FFCC00]' },
-                  { id: 'emola', name: 'E-Mola', color: 'bg-[#F7941D]' },
-                  { id: 'card', name: 'Cartão', color: 'bg-primary' }
+                  { id: 'mpesa', name: 'M-Pesa', color: 'bg-[#E61C25]', available: true },
+                  { id: 'mkesh', name: 'M-Kesh', color: 'bg-[#FFCC00]', available: false },
+                  { id: 'emola', name: 'E-Mola', color: 'bg-[#F7941D]', available: false },
+                  { id: 'card', name: 'Cartão', color: 'bg-primary', available: false }
                 ].map((method) => (
                   <button
                     key={method.id}
-                    onClick={() => setSelectedMethod(method.id as any)}
+                    onClick={() => method.available && setSelectedMethod(method.id as any)}
+                    disabled={!method.available}
                     className={cn(
                       "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                      !method.available && "opacity-50 cursor-not-allowed",
                       selectedMethod === method.id 
                         ? "border-primary bg-primary/5" 
                         : "border-outline-variant/10 bg-surface-container-lowest"
@@ -3577,6 +3579,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
                   >
                     <div className={cn("w-8 h-8 rounded-full", method.color)} />
                     <span className="text-xs font-bold text-on-surface">{method.name}</span>
+                    {!method.available && <span className="text-[9px] font-black uppercase text-on-surface-variant">Brevemente</span>}
                   </button>
                 ))}
               </div>
@@ -3608,7 +3611,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
             )}
 
             <button
-              disabled={!!loading || (selectedMethod !== 'card' && phoneNumber.length < 9)}
+              disabled={!!loading || !profile || (selectedMethod !== 'card' && phoneNumber.length < 9)}
               onClick={handleSubscribe}
               className={cn(
                 "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
