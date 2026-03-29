@@ -1,0 +1,3 @@
+/api/*  https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app/api/:splat  200
+/webhook  https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app/webhook  200
+/*  /index.html  200

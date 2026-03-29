@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -67,6 +68,9 @@ async function getE2Token() {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Enable CORS for all origins (Netlify frontend needs this)
+  app.use(cors());
 
   // Health check route
   app.get("/api/health", (req, res) => {

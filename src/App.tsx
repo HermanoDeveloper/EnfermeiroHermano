@@ -3406,7 +3406,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     try {
       setErrorMessage(null);
       // Call our backend to create the payment request
-      const response = await fetch('/api/v1/payments', {
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app' : '');
+      const response = await fetch(`${apiUrl}/api/v1/payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -3653,7 +3654,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
                         const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
                         const reference = `${userId}-${Date.now().toString().slice(-8)}`;
                         
-                        await fetch('/webhook', {
+                        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app' : '');
+                        await fetch(`${apiUrl}/webhook`, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
