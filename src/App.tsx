@@ -3395,6 +3395,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     console.log('Subscribing to plan:', selectedPlan.id, 'with method:', selectedMethod);
     if (!profile?.id && !isDevEnv) {
       console.error('No profile ID found');
+      setErrorMessage('Erro ao identificar o utilizador. Por favor, tente recarregar a página.');
+      setStatus('error');
       return;
     }
     
@@ -3611,7 +3613,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
             )}
 
             <button
-              disabled={!!loading || !profile || (selectedMethod !== 'card' && phoneNumber.length < 9)}
+              disabled={!!loading || !profile?.id || (selectedMethod !== 'card' && phoneNumber.length < 9)}
               onClick={handleSubscribe}
               className={cn(
                 "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
@@ -3620,6 +3622,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : !profile?.id ? (
+                <span>A carregar perfil...</span>
               ) : (
                 <>
                   <span>Pagar {selectedPlan.price}</span>
