@@ -106,9 +106,8 @@ async function startServer() {
       return res.status(400).json({ error: "Configuração da carteira incompleta." });
     }
 
-    // Construct a reference (alphanumeric only for safety, no spaces as per user snippet)
-    const cleanUserId = userId.replace(/-/g, "");
-    const reference = `${cleanUserId}${Date.now()}`.substring(0, 50).replace(/\s+/g, '');
+    // Construct a unique reference (max 27 chars)
+    const reference = `ref${Date.now()}${Math.floor(Math.random() * 10000)}`.substring(0, 27);
 
     try {
       const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
