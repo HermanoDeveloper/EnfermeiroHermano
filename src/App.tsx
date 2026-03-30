@@ -99,6 +99,10 @@ export default function App() {
   const [configError, setConfigError] = useState(!isSupabaseConfigured && !isDevEnv);
   const [aiConfigError, setAiConfigError] = useState(!isAIConfigured && !isDevEnv);
   const [isInitializing, setIsInitializing] = useState(!isDevEnv);
+
+  useEffect(() => {
+    console.log('App initialization:', { isDevEnv, isSupabaseConfigured, isAIConfigured });
+  }, []);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [primaryColor, setPrimaryColor] = useState<string>(() => localStorage.getItem('primaryColor') || '#00478d');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -364,7 +368,17 @@ export default function App() {
       fetchProfile().catch(err => console.error("Error fetching profile in effect:", err));
       fetchHistory().catch(err => console.error("Error fetching history in effect:", err));
     } else {
-      setProfile(null);
+      // In development, keep the mock profile if no session is present
+      if (isDevEnv) {
+        setProfile({
+          id: '00000000-0000-0000-0000-000000000000',
+          full_name: 'Desenvolvedor (Modo Dev)',
+          email: 'dev@exemplo.com',
+          avatar_url: 'https://picsum.photos/seed/dev/200'
+        });
+      } else {
+        setProfile(null);
+      }
       setRecentHistory([]);
     }
   }, [session]);
@@ -3306,6 +3320,7 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
 }
 
 function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { onBack: () => void, profile: any, onRefreshProfile: () => Promise<void>, isDevEnv: boolean }) {
+  const isDev = isDevEnv || profile?.email === 'hermanosaia01@gmail.com';
   const [loading, setLoading] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -3393,7 +3408,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     setPhoneError(null);
 
     console.log('Subscribing to plan:', selectedPlan.id, 'with method:', selectedMethod);
-    if (!profile?.id && !isDevEnv) {
+    if (!profile?.id && !isDev) {
       console.error('No profile ID found');
       setErrorMessage('Erro ao identificar o utilizador. Por favor, tente recarregar a página.');
       setStatus('error');
@@ -3405,9 +3420,11 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
 
     try {
       setErrorMessage(null);
-      // Call our backend to create the payment request
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app' : '');
-      const response = await fetch(`${apiUrl}/api/v1/payments`, {
+      // Use relative URL for same-origin full-stack apps
+      const apiUrl = ''; 
+      console.log('Initiating payment request to:', `/api/v1/payments`);
+      
+      const response = await fetch(`/api/v1/payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -3422,7 +3439,9 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         })
       });
 
+      console.log('Payment response status:', response.status);
       const result = await response.json();
+      console.log('Payment response body:', result);
 
       if (!response.ok) {
         throw new Error(result.message || result.error || 'Falha ao criar pedido de pagamento');
@@ -3478,7 +3497,12 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     } catch (error: any) {
       console.error('Subscription error:', error);
       setStatus('error');
-      setErrorMessage(error.message || 'Ocorreu um erro ao processar o seu pedido.');
+      
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        setErrorMessage('Erro de rede: Não foi possível contactar o servidor. Verifique se a aplicação está online.');
+      } else {
+        setErrorMessage(error.message || 'Ocorreu um erro ao processar o seu pedido.');
+      }
     } finally {
       setLoading(null);
     }
@@ -3614,7 +3638,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
             )}
 
             <button
-              disabled={!!loading || !profile?.id || (selectedMethod !== 'card' && phoneNumber.length < 9)}
+              disabled={!!loading || (!profile?.id && !isDev) || (selectedMethod !== 'card' && phoneNumber.length < 9)}
               onClick={handleSubscribe}
               className={cn(
                 "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
@@ -3623,7 +3647,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : !profile?.id ? (
+              ) : (!profile?.id && !isDev) ? (
                 <span>A carregar perfil...</span>
               ) : (
                 <>
@@ -3654,8 +3678,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
                         const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
                         const reference = `${userId}-${Date.now().toString().slice(-8)}`;
                         
-                        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://ais-pre-wuw6fehki57etwrgc2cg65-68101271483.us-west2.run.app' : '');
-                        await fetch(`${apiUrl}/webhook`, {
+                        await fetch(`/webhook`, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',

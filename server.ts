@@ -69,6 +69,14 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  console.log('Server initialization:', {
+    hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
+    hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasE2ClientId: !!process.env.E2PAYMENTS_CLIENT_ID,
+    hasE2ClientSecret: !!process.env.E2PAYMENTS_CLIENT_SECRET,
+    callbackUrl: process.env.E2PAYMENTS_CALLBACK_URL
+  });
+
   // Enable CORS for all origins (Netlify frontend needs this)
   app.use(cors());
 
