@@ -52,15 +52,15 @@ async function getE2Token() {
     })
   });
 
+  const responseText = await response.text().catch(() => "");
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error("e2Payments token error:", errorData);
+    console.error("e2Payments token error:", responseText);
     throw new Error(`Failed to get e2Payments token: ${response.statusText}`);
   }
 
-  const data = await response.json();
-  e2Token = `${data.token_type} ${data.access_token}`;
-  // Token expires in data.expires_in seconds. Buffer by 60 seconds.
+  const data = JSON.parse(responseText);
+  const tokenType = data.token_type || 'Bearer';
+  e2Token = `${tokenType} ${data.access_token}`;
   e2TokenExpiry = now + (data.expires_in - 60) * 1000;
   return e2Token;
 }
@@ -72,17 +72,143 @@ async function startServer() {
   console.log('Server initialization:', {
     hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
     hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasE2ClientId: !!process.env.E2PAYMENTS_CLIENT_ID,
-    hasE2ClientSecret: !!process.env.E2PAYMENTS_CLIENT_SECRET,
-    callbackUrl: process.env.E2PAYMENTS_CALLBACK_URL
+    hasE2Credentials: !!process.env.E2PAYMENTS_CLIENT_ID && !!process.env.E2PAYMENTS_CLIENT_SECRET
   });
 
-  // Enable CORS for all origins (Netlify frontend needs this)
+  // Enable CORS for all origins
   app.use(cors());
 
   // Health check route
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Local Paylink UI Route
+  app.get("/paylink", (req, res) => {
+    const { amount, reference, userId, method, planId, phone } = req.query;
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="pt">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Pagamento Seguro - Paylink</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+          .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        </style>
+      </head>
+      <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="w-full max-w-md glass rounded-3xl shadow-2xl overflow-hidden">
+          <div class="bg-orange-500 p-6 text-white text-center">
+            <h1 class="text-2xl font-bold">Paylink</h1>
+            <p class="text-orange-100 text-sm mt-1">Pagamento Seguro e Rápido</p>
+          </div>
+          
+          <div class="p-8">
+            <div class="text-center mb-8">
+              <span class="text-gray-500 text-sm uppercase tracking-wider font-semibold">Valor a Pagar</span>
+              <div class="text-4xl font-black text-gray-900 mt-1">${amount} MT</div>
+            </div>
+
+            <form id="paymentForm" class="space-y-6">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Número de Telefone</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">+258</span>
+                  <input 
+                    type="tel" 
+                    id="phone" 
+                    name="phone" 
+                    value="${phone || ''}"
+                    placeholder="84XXXXXXX" 
+                    required
+                    class="w-full pl-16 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all font-medium"
+                  >
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Introduza o número da sua conta ${method?.toString().toUpperCase() || 'Mobile Money'}</p>
+              </div>
+
+              <button 
+                type="submit" 
+                id="submitBtn"
+                class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2"
+              >
+                <span>Pagar Agora</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            </form>
+
+            <div id="status" class="hidden mt-6 p-4 rounded-xl text-center font-medium"></div>
+          </div>
+
+          <div class="bg-gray-50 p-4 text-center border-t border-gray-100">
+            <p class="text-xs text-gray-400">Referência: <span class="font-mono">${reference}</span></p>
+          </div>
+        </div>
+
+        <script>
+          const form = document.getElementById('paymentForm');
+          const submitBtn = document.getElementById('submitBtn');
+          const statusDiv = document.getElementById('status');
+
+          form.onsubmit = async (e) => {
+            e.preventDefault();
+            const phone = document.getElementById('phone').value;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Processando...</span>';
+            
+            try {
+              const response = await fetch('/api/v1/payments/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  amount: "${amount}",
+                  reference: "${reference}",
+                  userId: "${userId}",
+                  method: "${method}",
+                  phone: phone
+                })
+              });
+
+              const result = await response.json();
+              
+              if (response.ok) {
+                statusDiv.className = 'mt-6 p-4 rounded-xl text-center font-medium bg-green-50 text-green-700 border border-green-100';
+                statusDiv.innerHTML = '✅ Pedido enviado! Por favor, confirme no seu telemóvel.';
+                statusDiv.classList.remove('hidden');
+                
+                // Close popup after a short delay
+                setTimeout(() => {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'PAYMENT_INITIATED' }, '*');
+                    window.close();
+                  }
+                }, 3000);
+              } else {
+                throw new Error(result.message || 'Erro ao processar pagamento');
+              }
+            } catch (err) {
+              statusDiv.className = 'mt-6 p-4 rounded-xl text-center font-medium bg-red-50 text-red-700 border border-red-100';
+              statusDiv.innerHTML = '❌ ' + err.message;
+              statusDiv.classList.remove('hidden');
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<span>Tentar Novamente</span>';
+            }
+          };
+        </script>
+      </body>
+      </html>
+    `);
   });
 
   // API route to create a payment request
@@ -94,39 +220,9 @@ async function startServer() {
       return res.status(400).json({ error: "Campos obrigatórios em falta" });
     }
 
-    const E2_CLIENT_ID = process.env.E2PAYMENTS_CLIENT_ID;
     const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
 
-    if (!E2_CLIENT_ID) {
-      console.error("E2PAYMENTS_CLIENT_ID is not configured");
-      return res.status(500).json({ 
-        error: "Configuração Incompleta", 
-        message: "As credenciais da e2Payments não estão configuradas. Por favor, adicione E2PAYMENTS_CLIENT_ID às variáveis de ambiente." 
-      });
-    }
-
-    // Determine wallet ID based on method or use generic one
-    let walletId = process.env.E2PAYMENTS_WALLET_ID || "";
-    if (!walletId) {
-      if (method === 'emola') walletId = process.env.E2PAYMENTS_EMOLA_WALLET_ID || "";
-      else if (method === 'mpesa') walletId = process.env.E2PAYMENTS_MPESA_WALLET_ID || "";
-      else if (method === 'mkesh') walletId = process.env.E2PAYMENTS_MKESH_WALLET_ID || "";
-    }
-
-    if (!walletId && method !== 'card') {
-      console.error(`Wallet ID missing for method: ${method}`);
-      return res.status(400).json({ error: "Configuração da carteira incompleta." });
-    }
-
-    // Construct a unique reference (max 27 chars)
-    // Encode UUID (32 hex -> 22 base64) + random suffix
-    const cleanId = userId.replace(/-/g, '');
-    const encodedId = Buffer.from(cleanId, 'hex').toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-    const suffix = Math.random().toString(36).substring(2, 7);
-    const reference = (encodedId + suffix).substring(0, 27);
+    console.log(`Payment request: method=${method}, amount=${amount}, userId=${userId}`);
 
     try {
       const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
@@ -151,33 +247,62 @@ async function startServer() {
         }
       }
 
-      // Get e2Payments token
-      let token;
-      try {
-        token = await getE2Token();
-      } catch (tokenErr: any) {
-        return res.status(500).json({ error: "Erro de Autenticação", message: tokenErr.message });
+      // Construct a unique reference
+      const encodedUserId = Buffer.from(userId.replace(/-/g, ''), 'hex').toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+      
+      const reference = `${encodedUserId}${crypto.randomBytes(4).toString('hex')}`;
+
+      // Internal Paylink URL
+      const paylinkUrl = new URL(`${APP_URL}/paylink`);
+      paylinkUrl.searchParams.append('amount', amount.toString());
+      paylinkUrl.searchParams.append('reference', reference);
+      paylinkUrl.searchParams.append('userId', userId);
+      paylinkUrl.searchParams.append('method', method);
+      paylinkUrl.searchParams.append('planId', planId);
+      paylinkUrl.searchParams.append('phone', phone || '');
+      
+      console.log(`Redirecting to Internal Paylink: ${paylinkUrl.toString()}`);
+
+      return res.json({
+        status: "success",
+        message: "Redirecionando para o formulário de pagamento",
+        data: {
+          checkout_url: paylinkUrl.toString(),
+          reference: reference
+        }
+      });
+    } catch (error) {
+      console.error("Failed to create payment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // API route to confirm and trigger the STK push
+  app.post("/api/v1/payments/confirm", express.json(), async (req, res) => {
+    const { amount, reference, userId, method, phone } = req.body;
+
+    try {
+      const token = await getE2Token();
+      const walletId = process.env[`E2PAYMENTS_${method.toUpperCase()}_WALLET_ID`] || process.env.E2PAYMENTS_WALLET_ID;
+      
+      if (!walletId) {
+        return res.status(400).json({ error: "Wallet ID not configured for this method" });
       }
 
-      // Construct endpoint based on user's provided snippet pattern
-      // Pattern: https://e2payments.explicador.co.mz/v1/c2b/{method}-payment/{walletId}
       const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
       const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
-
-      // e2Payments usually expects 9 digits for mobile money in Mozambique (e.g., 84XXXXXXX)
       const formattedPhone = phone.replace(/\D/g, '').slice(-9);
 
-      console.log(`Initiating ${paymentMethod} payment for ${formattedPhone} (Wallet: ${walletId}) at ${endpoint}`);
-
-      // Construct payload according to official e2Payments documentation
       const payload = {
-        client_id: E2_CLIENT_ID,
+        client_id: process.env.E2PAYMENTS_CLIENT_ID,
         amount: amount.toString(),
-        phone: phone.replace(/\D/g, ''), // Ensure only digits
-        reference: reference.substring(0, 27)
+        phone: formattedPhone,
+        reference: reference,
+        walletId: walletId
       };
-      
-      console.log("Sending payload to e2Payments (v2):", JSON.stringify(payload));
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -185,37 +310,24 @@ async function startServer() {
           "Authorization": token,
           "Content-Type": "application/json",
           "Accept": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
         },
         body: JSON.stringify(payload),
       });
 
-      let data;
-      const responseText = await response.text();
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("e2Payments non-JSON response:", responseText);
-        return res.status(500).json({ error: "Erro na API de Pagamentos", message: "A API retornou uma resposta inválida." });
-      }
+      const data = await response.json();
 
       if (!response.ok) {
-        console.error("FULL e2Payments API error response:", JSON.stringify(data, null, 2));
         return res.status(response.status).json({
           error: "Erro no Pagamento",
-          message: data.message || "A API de pagamentos recusou o pedido.",
-          details: data.errors || data
+          message: data.message || "A API de pagamentos recusou o pedido."
         });
       }
 
-      // e2Payments response usually indicates if the request was sent to the phone
-      res.json({
-        status: "success",
-        message: "Pedido de pagamento enviado para o telemóvel",
-        data: data
-      });
-    } catch (error) {
-      console.error("Failed to create payment:", error);
-      res.status(500).json({ error: "Internal server error" });
+      res.json({ status: "success", data });
+    } catch (error: any) {
+      console.error("Payment confirmation error:", error);
+      res.status(500).json({ error: "Internal server error", message: error.message });
     }
   });
 

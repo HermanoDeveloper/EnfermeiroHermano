@@ -3377,6 +3377,9 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         setTimeout(() => {
           onBack();
         }, 2000);
+      } else if (event.data?.type === 'PAYMENT_INITIATED') {
+        setStatus('processing');
+        setErrorMessage('Pedido enviado para o seu telemóvel. Por favor, confirme o pagamento introduzindo o seu PIN no seu telemóvel.');
       }
     };
     window.addEventListener('message', handleMessage);
@@ -3440,7 +3443,14 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
       });
 
       console.log('Payment response status:', response.status);
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Non-JSON response from payment API:", responseText);
+        throw new Error(`Erro na resposta do servidor (não-JSON): ${responseText.substring(0, 100)}...`);
+      }
       console.log('Payment response body:', result);
 
       if (!response.ok) {
