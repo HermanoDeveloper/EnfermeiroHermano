@@ -3591,9 +3591,6 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         setTimeout(() => {
           onBack();
         }, 2000);
-      } else if (event.data?.type === 'PAYMENT_INITIATED') {
-        setStatus('processing');
-        setErrorMessage('Pedido enviado para o seu telemóvel. Por favor, confirme o pagamento introduzindo o seu PIN no seu telemóvel.');
       }
     };
     window.addEventListener('message', handleMessage);
@@ -3642,7 +3639,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
     }
     
     setLoading(selectedPlan.id);
-    setStatus('processing');
+    // Removed global setStatus('processing') to avoid premature overlay
+    // The button will show a spinner via the loading state
 
     try {
       setErrorMessage(null);
@@ -3701,12 +3699,11 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         method: result.data?.method
       });
       
-      // Clear processing status first to remove the overlay
-      setStatus('idle');
+      // Clear loading state
       setLoading(null);
       setPaymentData({ ...result.data, planId: selectedPlan.id });
       
-      // Use a small timeout to ensure status overlay is gone before showing modal
+      // Use a small timeout to ensure UI is ready before showing modal
       setTimeout(() => {
         console.log("Triggering setShowPaymentModal(true)");
         setShowPaymentModal(true);
