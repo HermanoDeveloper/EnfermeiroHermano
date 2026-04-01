@@ -81,11 +81,19 @@ async function startServer() {
   console.log('Server initialization:', {
     hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
     hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasE2Credentials: !!process.env.E2PAYMENTS_CLIENT_ID && !!process.env.E2PAYMENTS_CLIENT_SECRET
+    hasE2Credentials: !!process.env.E2PAYMENTS_CLIENT_ID && !!process.env.E2PAYMENTS_CLIENT_SECRET,
+    appUrl: process.env.APP_URL,
+    callbackUrl: process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null)
   });
 
   // Enable CORS for all origins
   app.use(cors());
+
+  // Global request logging
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
 
   // Health check route
   app.get("/api/health", (req, res) => {
@@ -97,6 +105,7 @@ async function startServer() {
 
   // API route to create a payment request
   app.post("/api/v1/payments", express.json(), async (req, res) => {
+    console.log("Received /api/v1/payments request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
     if (!amount || !userId || !planId || !durationDays) {

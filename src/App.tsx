@@ -3574,7 +3574,11 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
   };
 
   const handleSubscribe = async () => {
-    if (!selectedPlan) return;
+    console.log('handleSubscribe called', { selectedPlan, selectedMethod, phoneNumber, hasProfile: !!profile?.id });
+    if (!selectedPlan) {
+      console.warn('No plan selected');
+      return;
+    }
     
     const error = selectedMethod !== 'card' ? validatePhone(phoneNumber, selectedMethod) : null;
     if (error) {
@@ -3597,8 +3601,15 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     try {
       setErrorMessage(null);
       // Use relative URL for same-origin full-stack apps
-      const apiUrl = ''; 
       console.log('Initiating payment request to:', `/api/v1/payments`);
+      console.log('Payment payload:', {
+        amount: selectedPlan.amount,
+        method: selectedMethod,
+        userId: profile?.id || '00000000-0000-0000-0000-000000000000',
+        planId: selectedPlan.id,
+        durationDays: selectedPlan.days,
+        phone: phoneNumber
+      });
       
       const response = await fetch(`/api/v1/payments`, {
         method: 'POST',
@@ -3615,8 +3626,10 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         })
       });
 
-      console.log('Payment response status:', response.status);
+      console.log('Payment response status:', response.status, response.statusText);
       const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+
       let result;
       try {
         result = JSON.parse(responseText);
@@ -3624,13 +3637,19 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         console.error("Non-JSON response from payment API:", responseText);
         throw new Error(`Erro na resposta do servidor (não-JSON): ${responseText.substring(0, 100)}...`);
       }
-      console.log('Payment response body:', result);
+      console.log('Parsed payment response body:', result);
 
       if (!response.ok) {
-        throw new Error(result.message || result.error || 'Falha ao criar pedido de pagamento');
+        throw new Error(result.message || result.error || `Falha ao criar pedido de pagamento (Status: ${response.status})`);
+      }
+
+      if (!result.data) {
+        console.error("No data returned from payment API:", result);
+        throw new Error("O servidor não retornou os dados necessários para o pagamento.");
       }
 
       // Open the in-app payment modal
+      console.log("Setting payment data and showing modal:", result.data);
       setPaymentData(result.data);
       setShowPaymentModal(true);
       setLoading(null);
@@ -3640,10 +3659,15 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
       console.error('Subscription error:', error);
       setStatus('error');
       
+      const msg = error.message || 'Ocorreu um erro ao processar o seu pedido.';
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         setErrorMessage('Erro de rede: Não foi possível contactar o servidor. Verifique se a aplicação está online.');
       } else {
-        setErrorMessage(error.message || 'Ocorreu um erro ao processar o seu pedido.');
+        setErrorMessage(msg);
+      }
+      // Only alert in dev or for the special user to avoid annoying regular users
+      if (isDev) {
+        alert(`Erro na Subscrição: ${msg}`);
       }
     } finally {
       setLoading(null);
