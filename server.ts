@@ -182,12 +182,18 @@ async function startServer() {
       const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
       const formattedPhone = phone.replace(/\D/g, '').slice(-9);
 
-      const payload = {
+      const callbackUrl = process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null);
+
+      const payload: any = {
         client_id: process.env.E2PAYMENTS_CLIENT_ID,
         amount: amount.toString(),
         phone: formattedPhone,
         reference: reference
       };
+
+      if (callbackUrl) {
+        payload.callback_url = callbackUrl;
+      }
 
       console.log(`Sending STK push to ${endpoint} with payload:`, JSON.stringify(payload));
 
