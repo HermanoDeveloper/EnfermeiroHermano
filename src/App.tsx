@@ -3520,6 +3520,14 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentData, setPaymentData] = useState<any>(null);
 
+  useEffect(() => {
+    console.log('SubscriptionScreen mounted/updated', { 
+      hasProfile: !!profile, 
+      profileId: profile?.id,
+      currentScreen: 'subscription'
+    });
+  }, [profile]);
+
   const plans = [
     { 
       id: 'weekly', 
@@ -3676,11 +3684,21 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
       }
 
       // Open the in-app payment modal
-      console.log("Setting payment data and showing modal");
+      console.log("Setting payment data and showing modal. Data:", { 
+        hasRef: !!result.data?.reference, 
+        amount: result.data?.amount,
+        method: result.data?.method
+      });
+      
       setPaymentData({ ...result.data, planId: selectedPlan.id });
-      setShowPaymentModal(true);
-      setLoading(null);
-      setStatus('idle');
+      
+      // Use a small timeout to ensure state is flushed before showing modal
+      setTimeout(() => {
+        console.log("Triggering setShowPaymentModal(true)");
+        setShowPaymentModal(true);
+        setLoading(null);
+        setStatus('idle');
+      }, 100);
       return;
     } catch (error: any) {
       console.error('Subscription error:', error.message || error);
