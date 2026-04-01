@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Analytics } from "@vercel/analytics/react";
 import { 
   Facebook,
   Instagram,
@@ -54,7 +55,8 @@ import {
   AlertCircle,
   Download,
   FileText,
-  RefreshCw
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -601,7 +603,7 @@ export default function App() {
       const isExpired = expiry ? expiry < new Date() : true;
 
       if ((!isTrial && !isActive) || isExpired) {
-        return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
+        return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} recordHistory={recordHistory} />;
       }
     }
 
@@ -640,7 +642,7 @@ export default function App() {
       case 'notifications':
         return <NotificationsScreen onBack={() => setCurrentScreen('home')} />;
       case 'subscription':
-        return <SubscriptionScreen onBack={() => setCurrentScreen('home')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} />;
+        return <SubscriptionScreen onBack={() => setCurrentScreen('home')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} recordHistory={recordHistory} />;
       case 'profile':
         return <ProfileScreen 
           profile={profile} 
@@ -994,6 +996,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <Analytics />
     </div>
   );
 }
@@ -3304,7 +3307,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
   );
 }
 
-function PaymentModal({ data, onClose, onSuccess }: { data: any, onClose: () => void, onSuccess: () => void }) {
+function PaymentModal({ data, onClose, onSuccess, recordHistory }: { data: any, onClose: () => void, onSuccess: () => void, recordHistory?: (q: string, t?: string, m?: any) => Promise<void> }) {
   if (!data) return null;
   
   const [phone, setPhone] = useState(data.phone || '');
@@ -3328,9 +3331,9 @@ function PaymentModal({ data, onClose, onSuccess }: { data: any, onClose: () => 
     try {
       console.log('Initiating payment confirmation for:', {
         amount: data.amount,
-        reference: data.reference,
+        reference: data.reference ? '***' : 'none',
         method: data.method,
-        phone: phone
+        phone: phone ? `${phone.slice(0, 3)}***${phone.slice(-2)}` : 'none'
       });
 
       const response = await fetch('/api/v1/payments/confirm', {
@@ -3357,16 +3360,31 @@ function PaymentModal({ data, onClose, onSuccess }: { data: any, onClose: () => 
       }
       
       if (response.ok) {
-        console.log('Payment confirmation successful:', result);
+        console.log('Payment confirmation successful');
         setStatus('success');
+        if (recordHistory) {
+          recordHistory('Payment confirmed', 'payment_success', { 
+            method: data.method, 
+            amount: data.amount,
+            planId: data.planId
+          });
+        }
       } else {
-        console.error('Payment confirmation failed:', result);
+        console.error('Payment confirmation failed:', result?.message || 'Unknown error');
         throw new Error(result.message || result.error || 'Erro ao processar pagamento');
       }
     } catch (err: any) {
-      console.error('Payment confirmation error:', err);
-      setError(err.message || 'Ocorreu um erro inesperado ao processar o pagamento.');
+      console.error('Payment confirmation error:', err.message || err);
+      const errorMsg = err.message || 'Ocorreu um erro inesperado ao processar o pagamento.';
+      setError(errorMsg);
       setStatus('error');
+      if (recordHistory) {
+        recordHistory(errorMsg, 'payment_error', { 
+          method: data.method, 
+          amount: data.amount,
+          planId: data.planId
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -3490,7 +3508,7 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
   );
 }
 
-function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { onBack: () => void, profile: any, onRefreshProfile: () => Promise<void>, isDevEnv: boolean }) {
+function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recordHistory }: { onBack: () => void, profile: any, onRefreshProfile: () => Promise<void>, isDevEnv: boolean, recordHistory: (q: string, t?: string, m?: any) => Promise<void> }) {
   const isDev = isDevEnv || profile?.email === 'hermanosaia01@gmail.com';
   const [loading, setLoading] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
@@ -3547,6 +3565,10 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
       if (event.data?.type === 'PAYMENT_SUCCESS') {
         setStatus('success');
         onRefreshProfile().catch(err => console.error('Error refreshing profile after payment success:', err));
+        recordHistory('Subscription successful', 'subscription_success', { 
+          planId: selectedPlan?.id,
+          method: selectedMethod
+        });
         setTimeout(() => {
           onBack();
         }, 2000);
@@ -3557,7 +3579,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onRefreshProfile, onBack]);
+  }, [onRefreshProfile, onBack, selectedPlan, selectedMethod, recordHistory]);
 
   const validatePhone = (number: string, method: string) => {
     const clean = number.replace(/\D/g, '');
@@ -3574,7 +3596,12 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
   };
 
   const handleSubscribe = async () => {
-    console.log('handleSubscribe called', { selectedPlan, selectedMethod, phoneNumber, hasProfile: !!profile?.id });
+    console.log('handleSubscribe called', { 
+      planId: selectedPlan?.id, 
+      selectedMethod, 
+      phoneNumber: phoneNumber ? `${phoneNumber.slice(0, 3)}***${phoneNumber.slice(-2)}` : 'none', 
+      hasProfile: !!profile?.id 
+    });
     if (!selectedPlan) {
       console.warn('No plan selected');
       return;
@@ -3608,7 +3635,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         userId: profile?.id || '00000000-0000-0000-0000-000000000000',
         planId: selectedPlan.id,
         durationDays: selectedPlan.days,
-        phone: phoneNumber
+        phone: phoneNumber ? `${phoneNumber.slice(0, 3)}***${phoneNumber.slice(-2)}` : 'none'
       });
       
       const response = await fetch(`/api/v1/payments`, {
@@ -3628,38 +3655,46 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
 
       console.log('Payment response status:', response.status, response.statusText);
       const responseText = await response.text();
-      console.log('Raw response text:', responseText);
+      // console.log('Raw response text:', responseText); // Removed to avoid circular structure errors if response is weird
 
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error("Non-JSON response from payment API:", responseText);
-        throw new Error(`Erro na resposta do servidor (não-JSON): ${responseText.substring(0, 100)}...`);
+        console.error("Non-JSON response from payment API");
+        throw new Error(`Erro na resposta do servidor (não-JSON)`);
       }
-      console.log('Parsed payment response body:', result);
+      console.log('Parsed payment response body:', result?.data ? { ...result.data, reference: '***' } : 'No data');
 
       if (!response.ok) {
         throw new Error(result.message || result.error || `Falha ao criar pedido de pagamento (Status: ${response.status})`);
       }
 
       if (!result.data) {
-        console.error("No data returned from payment API:", result);
+        console.error("No data returned from payment API");
         throw new Error("O servidor não retornou os dados necessários para o pagamento.");
       }
 
       // Open the in-app payment modal
-      console.log("Setting payment data and showing modal:", result.data);
-      setPaymentData(result.data);
+      console.log("Setting payment data and showing modal");
+      setPaymentData({ ...result.data, planId: selectedPlan.id });
       setShowPaymentModal(true);
       setLoading(null);
       setStatus('idle');
       return;
     } catch (error: any) {
-      console.error('Subscription error:', error);
+      console.error('Subscription error:', error.message || error);
       setStatus('error');
       
       const msg = error.message || 'Ocorreu um erro ao processar o seu pedido.';
+      
+      // Record error history
+      recordHistory(msg, 'subscription_error', { 
+        planId: selectedPlan?.id, 
+        method: selectedMethod,
+        errorType: error instanceof TypeError ? 'network' : 'api'
+      });
+
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         setErrorMessage('Erro de rede: Não foi possível contactar o servidor. Verifique se a aplicação está online.');
       } else {
@@ -3978,6 +4013,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
               onRefreshProfile().catch(err => console.error('Error refreshing profile:', err));
               setTimeout(() => onBack(), 2000);
             }}
+            recordHistory={recordHistory}
           />
         )}
       </AnimatePresence>
