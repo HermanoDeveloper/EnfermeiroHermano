@@ -3303,6 +3303,177 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
     </div>
   );
 }
+
+function PaymentModal({ data, onClose, onSuccess }: { data: any, onClose: () => void, onSuccess: () => void }) {
+  if (!data) return null;
+  
+  const [phone, setPhone] = useState(data.phone || '');
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 9) {
+      setError('Por favor, introduza um número de telefone válido (9 dígitos)');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setStatus('processing');
+
+    try {
+      console.log('Initiating payment confirmation for:', {
+        amount: data.amount,
+        reference: data.reference,
+        method: data.method,
+        phone: phone
+      });
+
+      const response = await fetch('/api/v1/payments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: data.amount,
+          reference: data.reference,
+          userId: data.userId,
+          method: data.method,
+          phone: phone
+        })
+      });
+
+      const responseText = await response.text();
+      console.log('Payment confirmation response status:', response.status);
+      
+      let result: any;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse payment confirmation response:', responseText);
+        result = { message: responseText || 'Erro desconhecido no servidor' };
+      }
+      
+      if (response.ok) {
+        console.log('Payment confirmation successful:', result);
+        setStatus('success');
+      } else {
+        console.error('Payment confirmation failed:', result);
+        throw new Error(result.message || result.error || 'Erro ao processar pagamento');
+      }
+    } catch (err: any) {
+      console.error('Payment confirmation error:', err);
+      setError(err.message || 'Ocorreu um erro inesperado ao processar o pagamento.');
+      setStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="w-full max-w-md bg-surface rounded-3xl shadow-2xl overflow-hidden border border-outline-variant/10"
+      >
+        <div className="bg-primary p-6 text-on-primary text-center relative">
+          <button 
+            onClick={onClose}
+            className="absolute right-4 top-4 p-2 hover:bg-white/10 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <h2 className="text-2xl font-bold">Paylink</h2>
+          <p className="text-on-primary/80 text-sm mt-1">Pagamento Seguro e Rápido</p>
+        </div>
+        
+        <div className="p-8">
+          {status === 'success' ? (
+            <div className="text-center py-4">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-on-surface mb-2">Pedido Enviado!</h3>
+              <p className="text-on-surface-variant mb-8">
+                Por favor, verifique o seu telemóvel e introduza o seu PIN para confirmar o pagamento de <span className="font-bold text-on-surface">{data.amount} MT</span>.
+              </p>
+              <button 
+                onClick={onSuccess}
+                className="w-full py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg hover:shadow-primary/20 transition-all"
+              >
+                Entendido
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="text-center mb-8">
+                <span className="text-on-surface-variant text-sm uppercase tracking-wider font-semibold">Valor a Pagar</span>
+                <div className="text-4xl font-black text-on-surface mt-1">{data.amount} MT</div>
+              </div>
+
+              <form onSubmit={handleConfirm} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-2">Número de Telefone</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-medium">+258</span>
+                    <input 
+                      type="tel" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="84XXXXXXX" 
+                      required
+                      disabled={loading}
+                      className="w-full pl-16 pr-4 py-4 bg-surface-container border border-outline-variant/20 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-medium text-on-surface"
+                    />
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-2">
+                    Introduza o número da sua conta <span className="font-bold uppercase">{data.method}</span>
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="p-4 bg-error/10 border border-error/20 rounded-2xl text-error text-sm flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                )}
+
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-on-primary font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transform active:scale-95 transition-all flex items-center justify-center space-x-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
+                      <span>Processando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Pagar Agora</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-8 pt-6 border-t border-outline-variant/10 text-center">
+                <p className="text-xs text-on-surface-variant">
+                  Referência: <span className="font-mono font-medium">{data.reference}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
   return (
     <div className="flex items-start gap-4">
@@ -3328,6 +3499,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   const plans = [
     { 
@@ -3457,53 +3630,12 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
         throw new Error(result.message || result.error || 'Falha ao criar pedido de pagamento');
       }
 
-      // If it's a card payment or has a checkout URL, redirect the user
-      if (result.data?.checkout_url) {
-        const authWindow = window.open(
-          result.data.checkout_url,
-          'payment_popup',
-          'width=600,height=700'
-        );
-        
-        if (!authWindow) {
-          setErrorMessage('O popup foi bloqueado. Por favor, permita popups para este site para concluir o pagamento.');
-          setStatus('error');
-          setLoading(null);
-        }
-        return;
-      }
-
-      // For e2Payments STK push (mobile money)
-      if (result.status === "success") {
-        setStatus('processing');
-        setErrorMessage('Pedido enviado para o seu telemóvel. Por favor, confirme o pagamento introduzindo o seu PIN no seu telemóvel.');
-        
-        // In dev mode, we can still simulate success after a delay
-        if (isDevEnv) {
-          setTimeout(async () => {
-            console.log('Dev mode: Simulating payment success...');
-            setStatus('success');
-            try {
-              await onRefreshProfile();
-            } catch (err) {
-              console.error('Error refreshing profile in dev mode:', err);
-            }
-            setTimeout(() => onBack(), 2000);
-          }, 5000);
-        } else {
-          // Real flow: show instructions and wait for webhook
-          // We can poll here or just let the user know it's processing
-          setTimeout(async () => {
-            try {
-              await onRefreshProfile();
-              // If profile is updated, we can go back
-            } catch (err) {
-              console.error('Error refreshing profile after subscription:', err);
-            }
-          }, 10000);
-        }
-        return;
-      }
+      // Open the in-app payment modal
+      setPaymentData(result.data);
+      setShowPaymentModal(true);
+      setLoading(null);
+      setStatus('idle');
+      return;
     } catch (error: any) {
       console.error('Subscription error:', error);
       setStatus('error');
@@ -3684,9 +3816,16 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
                       setStatus('processing');
                       setErrorMessage(null);
                       try {
-                        console.log('Mock mode: Simulating webhook success...');
                         const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
-                        const reference = `${userId}-${Date.now().toString().slice(-8)}`;
+                        const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
+                        
+                        // Match the server's new 15-character reference format
+                        // For dev users, use the 'AAAAAAAAAAAAAAAAAAAAAA' prefix
+                        const reference = isDevUser 
+                          ? `AAAAAAAAAAAAAAAAAAAAAA${Math.random().toString(16).slice(2, 6)}`
+                          : Math.random().toString(16).slice(2, 17);
+                        
+                        console.log('Mock mode: Simulating webhook success for reference:', reference);
                         
                         await fetch(`/webhook`, {
                           method: 'POST',
@@ -3802,9 +3941,26 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv }: { o
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Payment Modal */}
+      <AnimatePresence>
+        {showPaymentModal && paymentData && (
+          <PaymentModal 
+            data={paymentData} 
+            onClose={() => setShowPaymentModal(false)}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              setStatus('success');
+              onRefreshProfile().catch(err => console.error('Error refreshing profile:', err));
+              setTimeout(() => onBack(), 2000);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
 function NotificationsScreen({ onBack }: { onBack: () => void }) {
   const notifications = [
     {
