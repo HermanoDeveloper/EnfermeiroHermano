@@ -3308,7 +3308,18 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
 }
 
 function PaymentModal({ data, onClose, onSuccess, recordHistory }: { data: any, onClose: () => void, onSuccess: () => void, recordHistory?: (q: string, t?: string, m?: any) => Promise<void> }) {
-  if (!data) return null;
+  useEffect(() => {
+    console.log('PaymentModal mounted with data:', {
+      amount: data?.amount,
+      method: data?.method,
+      hasReference: !!data?.reference
+    });
+  }, [data]);
+
+  if (!data) {
+    console.warn('PaymentModal: No data provided, returning null');
+    return null;
+  }
   
   const [phone, setPhone] = useState(data.phone || '');
   const [loading, setLoading] = useState(false);
@@ -3391,7 +3402,7 @@ function PaymentModal({ data, onClose, onSuccess, recordHistory }: { data: any, 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -3690,15 +3701,16 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         method: result.data?.method
       });
       
+      // Clear processing status first to remove the overlay
+      setStatus('idle');
+      setLoading(null);
       setPaymentData({ ...result.data, planId: selectedPlan.id });
       
-      // Use a small timeout to ensure state is flushed before showing modal
+      // Use a small timeout to ensure status overlay is gone before showing modal
       setTimeout(() => {
         console.log("Triggering setShowPaymentModal(true)");
         setShowPaymentModal(true);
-        setLoading(null);
-        setStatus('idle');
-      }, 100);
+      }, 150);
       return;
     } catch (error: any) {
       console.error('Subscription error:', error.message || error);
