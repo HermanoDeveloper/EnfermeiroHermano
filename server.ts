@@ -98,8 +98,11 @@ async function startServer() {
   // Global JSON parsing middleware
   app.use(express.json());
 
-  // Health check route
-  app.get("/api/health", (req, res) => {
+  // Create a router for API routes
+  const apiRouter = express.Router();
+
+  // API Health check
+  apiRouter.get("/health", (req, res) => {
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString()
@@ -107,7 +110,7 @@ async function startServer() {
   });
 
   // API route to process a payment (Create reference + STK Push)
-  app.post("/api/v1/payments/process", async (req, res) => {
+  apiRouter.post("/v1/payments/process", async (req, res) => {
     console.log("Received /api/v1/payments/process request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
@@ -199,7 +202,7 @@ async function startServer() {
   });
 
   // API route to create a payment request (Legacy)
-  app.post("/api/v1/payments", async (req, res) => {
+  apiRouter.post("/v1/payments", async (req, res) => {
     console.log("Received /api/v1/payments request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
@@ -259,7 +262,7 @@ async function startServer() {
   });
 
   // API route to confirm and trigger the STK push
-  app.post("/api/v1/payments/confirm", async (req, res) => {
+  apiRouter.post("/v1/payments/confirm", async (req, res) => {
     const { amount, reference, userId, method, phone } = req.body;
     console.log(`Confirming payment: ${method} for user ${userId}, amount ${amount}, ref ${reference}`);
 
@@ -343,6 +346,14 @@ async function startServer() {
       console.error("Payment confirmation error:", error);
       res.status(500).json({ error: "Internal server error", message: error.message });
     }
+  });
+
+  // Mount the API router
+  app.use("/api", apiRouter);
+
+  // Health check route (root level)
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok" });
   });
 
   // Payment callback route to handle external redirects in an iframe
@@ -507,10 +518,23 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    
+    // Catch-all for SPA routing, but EXCLUDE /api routes
+    app.get("*", (req, res, next) => {
+      if (req.url.startsWith("/api/")) {
+        return next();
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // 404 handler for API routes
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ 
+      error: "API Route Not Found", 
+      message: `The requested API endpoint ${req.method} ${req.originalUrl} does not exist.` 
+    });
+  });
 
   // Global error handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
