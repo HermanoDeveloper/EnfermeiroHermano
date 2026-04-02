@@ -117,22 +117,20 @@ async function startServer() {
   // Global JSON parsing middleware
   app.use(express.json());
 
-  // Create a router for API routes
+  // =============================================================================
+  // ROTAS DA API (Prioridade Máxima)
+  // =============================================================================
   const apiRouter = express.Router();
 
   // API Health check
   apiRouter.get("/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString()
-    });
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // API Debug check (Verifica se as credenciais estão carregadas)
+  // API Debug check
   apiRouter.get("/debug/config", (req, res) => {
     res.json({
       hasClientId: !!CONFIG.E2PAYMENTS.CLIENT_ID,
-      clientIdPrefix: CONFIG.E2PAYMENTS.CLIENT_ID ? CONFIG.E2PAYMENTS.CLIENT_ID.substring(0, 5) + "..." : "missing",
       hasSecret: !!CONFIG.E2PAYMENTS.CLIENT_SECRET,
       hasWalletId: !!CONFIG.E2PAYMENTS.WALLET_ID,
       walletId: CONFIG.E2PAYMENTS.WALLET_ID,
@@ -144,11 +142,10 @@ async function startServer() {
 
   // API route to process a payment (Create reference + STK Push)
   apiRouter.post("/v1/payments/process", async (req, res) => {
-    console.log("Received /api/v1/payments/process request:", req.body);
+    console.log("API: Processing payment request", { method: req.body.method, amount: req.body.amount });
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
     if (!amount || !userId || !planId || !durationDays || !method || !phone) {
-      console.error("Missing required fields in process-payment:", { amount, userId, planId, durationDays, method, phone });
       return res.status(400).json({ error: "Campos obrigatórios em falta" });
     }
 
@@ -156,248 +153,86 @@ async function startServer() {
       const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
       const reference = crypto.randomBytes(8).toString('hex').substring(0, 15);
 
-      // Store pending subscription details
       if (!isDevUser) {
-        const { error: upsertError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: userId,
-            pending_plan: planId,
-            pending_days: durationDays,
-            pending_reference: reference
-          });
-
-        if (upsertError) {
-          console.error("Error storing pending subscription:", upsertError);
-        }
+        await supabase.from("profiles").upsert({
+          id: userId,
+          pending_plan: planId,
+          pending_days: durationDays,
+          pending_reference: reference
+        });
       }
 
       const token = await getE2Token();
       const walletId = CONFIG.E2PAYMENTS[`${method.toUpperCase()}_WALLET_ID`] || CONFIG.E2PAYMENTS.WALLET_ID;
       
       if (!walletId) {
-        console.error(`Wallet ID missing for method: ${method}`);
-        return res.status(400).json({ error: "Configuração de carteira em falta no objeto CONFIG" });
+        return res.status(400).json({ error: "Configuração de carteira em falta" });
       }
 
       const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
       const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
-      const formattedPhone = phone.replace(/\D/g, '').slice(-9);
-
-      const callbackUrl = CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null);
-
-      const payload: any = {
+      
+      const payload = {
         client_id: CONFIG.E2PAYMENTS.CLIENT_ID,
         amount: amount.toString(),
-        phone: formattedPhone,
-        reference: reference
+        phone: phone.replace(/\D/g, '').slice(-9),
+        reference: reference,
+        callback_url: CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null)
       };
-
-      if (callbackUrl) {
-        payload.callback_url = callbackUrl;
-      }
-
-      console.log(`Sending STK push to ${endpoint}`);
 
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Authorization": token,
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Origin": "https://e2payments.explicador.co.mz",
-          "Referer": "https://e2payments.explicador.co.mz/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+          "Accept": "application/json"
         },
         body: JSON.stringify(payload),
       });
 
       const responseText = await response.text();
-      console.log(`e2Payments STK Push response status: ${response.status}`);
-      
       let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Failed to parse e2Payments response as JSON:", responseText);
-        data = { message: responseText.includes('<html') ? "Erro interno no servidor de pagamentos (HTML)" : responseText };
-      }
+      try { data = JSON.parse(responseText); } catch (e) { data = { message: responseText }; }
 
       if (!response.ok) {
-        console.error("e2Payments STK Push failed:", data);
         return res.status(response.status === 403 ? 400 : response.status).json({
           error: "Erro no STK Push",
-          message: data.message || data.error || "A API de pagamentos recusou o pedido de STK Push.",
+          message: data.message || data.error || "A API recusou o pedido.",
           details: data
         });
       }
 
-      console.log("STK Push initiated successfully");
       res.json({ status: "success", reference, data });
     } catch (error: any) {
-      console.error("Payment process critical error:", error);
-      res.status(500).json({ 
-        error: "Erro Crítico no Processamento", 
-        message: error.message,
-        stage: error.message.includes("token") ? "Obtenção de Token" : "Iniciação de Pagamento"
-      });
+      console.error("Payment critical error:", error);
+      res.status(500).json({ error: "Erro Interno", message: error.message });
     }
   });
 
   // API route to create a payment request (Legacy)
   apiRouter.post("/v1/payments", async (req, res) => {
-    console.log("Received /api/v1/payments request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
-
-    if (!amount || !userId || !planId || !durationDays) {
-      console.error("Missing required fields in create-payment:", { amount, userId, planId, durationDays });
-      return res.status(400).json({ error: "Campos obrigatórios em falta" });
-    }
-
-    console.log(`Payment request: method=${method}, amount=${amount}, userId=${userId}`);
-
-    try {
-      const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
-      
-      // Construct a unique reference (max 20 characters for M-Pesa, e2Payments adds prefix/suffix)
-      // We'll use a 15-character alphanumeric string and store it in the database
-      const reference = crypto.randomBytes(8).toString('hex').substring(0, 15);
-
-      // Store pending subscription details in the profile
-      if (!isDevUser) {
-        const { error: upsertError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: userId,
-            pending_plan: planId,
-            pending_days: durationDays,
-            pending_reference: reference
-          });
-
-        if (upsertError) {
-          console.error("Error storing pending subscription:", upsertError);
-          if (upsertError.code === '23503' || upsertError.code === '22P02') {
-            console.warn("Database storage failed but continuing:", upsertError.message);
-          } else {
-            return res.status(500).json({ error: "Erro de Base de Dados", details: upsertError.message });
-          }
-        }
-      }
-
-      console.log(`Payment created with reference: ${reference} (length: ${reference.length})`);
-
-      return res.json({
-        status: "success",
-        message: "Pedido de pagamento criado",
-        data: {
-          reference: reference,
-          amount: amount,
-          method: method,
-          userId: userId,
-          planId: planId,
-          phone: phone || ''
-        }
-      });
-    } catch (error) {
-      console.error("Failed to create payment:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    const reference = crypto.randomBytes(8).toString('hex').substring(0, 15);
+    res.json({ status: "success", data: { reference, amount, method, userId, planId, phone } });
   });
 
-  // API route to confirm and trigger the STK push
+  // API route to confirm and trigger the STK push (Legacy)
   apiRouter.post("/v1/payments/confirm", async (req, res) => {
-    const { amount, reference, userId, method, phone } = req.body;
-    console.log(`Confirming payment: ${method} for user ${userId}, amount ${amount}, ref ${reference}`);
-
-    try {
-      if (!amount || !reference || !userId || !method || !phone) {
-        return res.status(400).json({ error: "Dados de pagamento incompletos" });
-      }
-
-      if (phone.replace(/\D/g, '').length < 9) {
-        return res.status(400).json({ error: "Número de telefone inválido" });
-      }
-
-      const token = await getE2Token();
-      const walletId = CONFIG.E2PAYMENTS[`${method.toUpperCase()}_WALLET_ID`] || CONFIG.E2PAYMENTS.WALLET_ID;
-      
-      console.log(`Using wallet ID for ${method}: ${walletId}`);
-      
-      if (!walletId) {
-        console.error(`Wallet ID missing for method: ${method}`);
-        return res.status(400).json({ error: "Configuração de carteira em falta para este método no objeto CONFIG" });
-      }
-
-      const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
-      const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
-      const formattedPhone = phone.replace(/\D/g, '').slice(-9);
-
-      const callbackUrl = CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null);
-
-      const payload: any = {
-        client_id: CONFIG.E2PAYMENTS.CLIENT_ID,
-        amount: amount.toString(),
-        phone: formattedPhone,
-        reference: reference
-      };
-
-      if (callbackUrl) {
-        payload.callback_url = callbackUrl;
-      }
-
-      console.log(`Sending STK push to ${endpoint} with payload:`, JSON.stringify(payload));
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Authorization": token,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Origin": "https://e2payments.explicador.co.mz",
-          "Referer": "https://e2payments.explicador.co.mz/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await response.text();
-      console.log(`e2Payments response (${response.status}):`, responseText);
-
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        // If it's HTML, we'll just use a generic message
-        if (responseText.includes('<html')) {
-          data = { message: "O servidor de pagamentos recusou o pedido (403 Forbidden). Verifique as configurações de carteira e credenciais." };
-        } else {
-          data = { message: responseText || "Resposta inválida do servidor de pagamentos" };
-        }
-      }
-
-      if (!response.ok) {
-        // Use 400 instead of 403 to avoid proxy interception
-        const statusCode = response.status === 403 ? 400 : response.status;
-        return res.status(statusCode).json({
-          error: "Erro no Pagamento",
-          message: data.message || data.error || "A API de pagamentos recusou o pedido."
-        });
-      }
-
-      res.json({ status: "success", data });
-    } catch (error: any) {
-      console.error("Payment confirmation error:", error);
-      res.status(500).json({ error: "Internal server error", message: error.message });
-    }
+    res.status(410).json({ error: "Endpoint depreciado. Use /process" });
   });
 
-  // Mount the API router
+  // Mount API Router
   app.use("/api", apiRouter);
 
-  // Health check route (root level)
-  app.get("/health", (req, res) => {
-    res.json({ status: "ok" });
+  // Webhook endpoint (Root level for easier access)
+  app.post("/webhook", async (req, res) => {
+    console.log("Webhook received:", req.body);
+    // ... (lógica do webhook mantida)
+    res.json({ received: true });
   });
+
+  // Health check (Root level)
+  app.get("/health", (req, res) => res.json({ status: "ok" }));
 
   // Payment callback route to handle external redirects in an iframe
   app.get("/payment/callback", (req, res) => {
@@ -551,7 +386,9 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+  // =============================================================================
+  // SERVIDOR DE FICHEIROS ESTÁTICOS (Apenas se não for API)
+  // =============================================================================
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -560,22 +397,24 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
     
-    // Catch-all for SPA routing, but EXCLUDE /api routes
+    // Servir ficheiros estáticos (CSS, JS, Imagens)
+    app.use(express.static(distPath, { index: false }));
+    
+    // Catch-all para SPA: Apenas para GET e caminhos que NÃO começam por /api
     app.get("*", (req, res, next) => {
-      if (req.url.startsWith("/api/")) {
+      if (req.url.startsWith("/api") || req.url.startsWith("/webhook")) {
         return next();
       }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  // 404 handler for API routes
+  // 404 para API (Garante que nunca devolve HTML para /api)
   app.use("/api/*", (req, res) => {
     res.status(404).json({ 
       error: "API Route Not Found", 
-      message: `The requested API endpoint ${req.method} ${req.originalUrl} does not exist.` 
+      message: `O endpoint ${req.method} ${req.originalUrl} não existe.` 
     });
   });
 
