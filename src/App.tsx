@@ -3563,8 +3563,11 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error("Non-JSON response from payment API");
-        throw new Error(`Erro na resposta do servidor (não-JSON)`);
+        console.error("Non-JSON response from payment API:", responseText);
+        // If it's an HTML response, extract the title or a snippet
+        const htmlMatch = responseText.match(/<title>(.*?)<\/title>/i);
+        const errorSnippet = htmlMatch ? htmlMatch[1] : responseText.slice(0, 100);
+        throw new Error(`Erro na resposta do servidor (não-JSON): ${errorSnippet}`);
       }
 
       if (!response.ok) {

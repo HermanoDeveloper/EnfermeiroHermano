@@ -95,6 +95,9 @@ async function startServer() {
     next();
   });
 
+  // Global JSON parsing middleware
+  app.use(express.json());
+
   // Health check route
   app.get("/api/health", (req, res) => {
     res.json({ 
@@ -104,7 +107,7 @@ async function startServer() {
   });
 
   // API route to process a payment (Create reference + STK Push)
-  app.post("/api/v1/payments/process", express.json(), async (req, res) => {
+  app.post("/api/v1/payments/process", async (req, res) => {
     console.log("Received /api/v1/payments/process request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
@@ -196,7 +199,7 @@ async function startServer() {
   });
 
   // API route to create a payment request (Legacy)
-  app.post("/api/v1/payments", express.json(), async (req, res) => {
+  app.post("/api/v1/payments", async (req, res) => {
     console.log("Received /api/v1/payments request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;
 
@@ -256,7 +259,7 @@ async function startServer() {
   });
 
   // API route to confirm and trigger the STK push
-  app.post("/api/v1/payments/confirm", express.json(), async (req, res) => {
+  app.post("/api/v1/payments/confirm", async (req, res) => {
     const { amount, reference, userId, method, phone } = req.body;
     console.log(`Confirming payment: ${method} for user ${userId}, amount ${amount}, ref ${reference}`);
 
@@ -362,7 +365,7 @@ async function startServer() {
   });
 
   // Webhook endpoint for payment notifications
-  app.post("/webhook", express.json(), async (req, res) => {
+  app.post("/webhook", async (req, res) => {
     try {
       const event = req.body;
       console.log("Received Payment Webhook:", JSON.stringify(event, null, 2));
@@ -509,10 +512,20 @@ async function startServer() {
     });
   }
 
+  // Global error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Global error handler caught:", err);
+    res.status(err.status || 500).json({ 
+      error: "Internal Server Error", 
+      message: err.message || "An unexpected error occurred",
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    if (!process.env.E2PAYMENTS_CLIENT_ID) {
-      console.warn("WARNING: E2PAYMENTS_CLIENT_ID is not set. Payments will not work.");
+    if (!process.env.E2PAYMENTS_CLIENT_ID || !process.env.E2PAYMENTS_CLIENT_SECRET) {
+      console.warn("WARNING: E2PAYMENTS credentials are not fully set. Payments will not work.");
     }
   });
 }
