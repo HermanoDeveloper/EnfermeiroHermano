@@ -103,7 +103,99 @@ async function startServer() {
     });
   });
 
-  // API route to create a payment request
+  // API route to process a payment (Create reference + STK Push)
+  app.post("/api/v1/payments/process", express.json(), async (req, res) => {
+    console.log("Received /api/v1/payments/process request:", req.body);
+    const { amount, method, userId, planId, durationDays, phone } = req.body;
+
+    if (!amount || !userId || !planId || !durationDays || !method || !phone) {
+      console.error("Missing required fields in process-payment:", { amount, userId, planId, durationDays, method, phone });
+      return res.status(400).json({ error: "Campos obrigatórios em falta" });
+    }
+
+    try {
+      const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
+      const reference = crypto.randomBytes(8).toString('hex').substring(0, 15);
+
+      // Store pending subscription details
+      if (!isDevUser) {
+        const { error: upsertError } = await supabase
+          .from("profiles")
+          .upsert({
+            id: userId,
+            pending_plan: planId,
+            pending_days: durationDays,
+            pending_reference: reference
+          });
+
+        if (upsertError) {
+          console.error("Error storing pending subscription:", upsertError);
+        }
+      }
+
+      const token = await getE2Token();
+      const walletId = process.env[`E2PAYMENTS_${method.toUpperCase()}_WALLET_ID`] || process.env.E2PAYMENTS_WALLET_ID;
+      
+      if (!walletId) {
+        console.error(`Wallet ID missing for method: ${method}`);
+        return res.status(400).json({ error: "Configuração de carteira em falta" });
+      }
+
+      const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
+      const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
+      const formattedPhone = phone.replace(/\D/g, '').slice(-9);
+
+      const callbackUrl = process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null);
+
+      const payload: any = {
+        client_id: process.env.E2PAYMENTS_CLIENT_ID,
+        amount: amount.toString(),
+        phone: formattedPhone,
+        reference: reference
+      };
+
+      if (callbackUrl) {
+        payload.callback_url = callbackUrl;
+      }
+
+      console.log(`Sending STK push to ${endpoint}`);
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": token,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Origin": "https://e2payments.explicador.co.mz",
+          "Referer": "https://e2payments.explicador.co.mz/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        data = { message: responseText.includes('<html') ? "Erro no servidor de pagamentos" : responseText };
+      }
+
+      if (!response.ok) {
+        return res.status(response.status === 403 ? 400 : response.status).json({
+          error: "Erro no Pagamento",
+          message: data.message || data.error || "A API de pagamentos recusou o pedido."
+        });
+      }
+
+      res.json({ status: "success", reference, data });
+    } catch (error: any) {
+      console.error("Payment process error:", error);
+      res.status(500).json({ error: "Internal server error", message: error.message });
+    }
+  });
+
+  // API route to create a payment request (Legacy)
   app.post("/api/v1/payments", express.json(), async (req, res) => {
     console.log("Received /api/v1/payments request:", req.body);
     const { amount, method, userId, planId, durationDays, phone } = req.body;

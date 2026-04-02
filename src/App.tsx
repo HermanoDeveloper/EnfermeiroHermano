@@ -56,7 +56,9 @@ import {
   Download,
   FileText,
   RefreshCw,
-  XCircle
+  XCircle,
+  Share2,
+  Loader2
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -201,19 +203,19 @@ export default function App() {
   const handleSelectDisease = (d: Disease) => {
     setSelectedDisease(d);
     setCurrentScreen('disease-detail');
-    recordHistory(d.name, 'view', { id: d.id, category: 'disease' });
+    recordHistory(d.name, 'view', { id: d.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
   };
 
   const handleSelectProcedure = (p: Procedure) => {
     setSelectedProcedure(p);
     setCurrentScreen('procedure-detail');
-    recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
+    recordHistory(p.name, 'view', { id: p.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
   };
 
   const handleGlobalSearch = async () => {
     if (!searchQuery.trim()) return;
     
-    recordHistory(searchQuery, 'search');
+    await recordHistory(searchQuery, 'search').catch(err => console.error('Error recording history:', err));
 
     // If we are on diseases screen or home, we can trigger AI search for diseases
     if (currentScreen === 'diseases' || currentScreen === 'home') {
@@ -226,7 +228,7 @@ export default function App() {
             return [result, ...prev];
           });
           setSelectedDisease(result);
-          recordHistory(result.name, 'view', { id: result.id, category: 'disease' });
+          await recordHistory(result.name, 'view', { id: result.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
           setCurrentScreen('disease-detail');
         } else {
           showToast('Não foi possível encontrar informações detalhadas sobre esta doença no momento.', 'error');
@@ -252,7 +254,7 @@ export default function App() {
             return [result, ...prev];
           });
           setSelectedProcedure(result);
-          recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
+          await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
           setCurrentScreen('procedure-detail');
         } else {
           showToast('Não foi possível encontrar detalhes sobre este procedimento no momento.', 'error');
@@ -297,18 +299,18 @@ export default function App() {
           return [result, ...prev];
         });
         setSelectedProcedure(result);
-        recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
+        await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
       } else {
         // Fallback to local data if AI fails
         setSelectedProcedure(procedure);
-        recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
+        await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
         showToast('Usando dados locais (IA indisponível).', 'error');
       }
       setCurrentScreen('procedure-detail');
     } catch (error) {
       console.error("Select Procedure AI failed", error);
       setSelectedProcedure(procedure);
-      recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' });
+      await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
       setCurrentScreen('procedure-detail');
       showToast('Erro na IA. Usando dados locais.', 'error');
     } finally {
@@ -664,7 +666,7 @@ export default function App() {
           onClearPaymentSuccess={() => setPaymentSuccess(false)}
         />;
       case 'disease-detail':
-        return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} />;
+        return <DiseaseDetailScreen disease={selectedDisease} onBack={() => setCurrentScreen('diseases')} onShowToast={showToast} />;
       case 'procedure-detail':
         return (
           <ProcedureDetailScreen 
@@ -672,6 +674,7 @@ export default function App() {
             onBack={() => setCurrentScreen('procedures')} 
             onEnhanceAI={handleEnhanceProcedureAI}
             isEnhancing={isEnhancingProcedure}
+            onShowToast={showToast}
           />
         );
       case 'ai-assistant':
@@ -685,7 +688,7 @@ export default function App() {
                 return [d, ...prev];
               });
               setSelectedDisease(d); 
-              recordHistory(d.name, 'view', { id: d.id, category: 'disease' });
+              recordHistory(d.name, 'view', { id: d.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
               setCurrentScreen('disease-detail'); 
             }}
             onShowProcedure={(p) => { 
@@ -694,7 +697,7 @@ export default function App() {
                 return [p, ...prev];
               });
               setSelectedProcedure(p); 
-              recordHistory(p.name, 'view', { id: p.id, category: 'procedure' });
+              recordHistory(p.name, 'view', { id: p.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
               setCurrentScreen('procedure-detail'); 
             }}
           />
@@ -1481,9 +1484,30 @@ function ProceduresScreen({
   );
 }
 
-function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onBack: () => void }) {
+function DiseaseDetailScreen({ disease, onBack, onShowToast }: { disease: Disease | null, onBack: () => void, onShowToast?: (msg: string, type?: 'success' | 'error') => void }) {
   const [isDownloading, setIsDownloading] = useState(false);
   if (!disease) return null;
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Biblioteca de Saúde - ${disease.name}`,
+      text: `Confira informações detalhadas sobre ${disease.name} na Biblioteca de Saúde.`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        if (onShowToast) onShowToast('Link copiado para a área de transferência!');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Error sharing:', error);
+      }
+    }
+  };
 
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
@@ -1674,6 +1698,18 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
             >
               {isDownloading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShare();
+              }}
+              data-html2canvas-ignore
+              className="p-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all active:scale-95"
+              title="Compartilhar"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="absolute bottom-8 left-8 right-8">
@@ -1823,14 +1859,36 @@ function DiseaseDetailScreen({ disease, onBack }: { disease: Disease | null, onB
   );
 }
 
-function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: { 
+function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing, onShowToast }: { 
   procedure: Procedure | null, 
   onBack: () => void,
   onEnhanceAI: (p: Procedure) => void,
-  isEnhancing: boolean
+  isEnhancing: boolean,
+  onShowToast?: (msg: string, type?: 'success' | 'error') => void
 }) {
   const [isDownloading, setIsDownloading] = useState(false);
   if (!procedure) return null;
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Biblioteca de Saúde - ${procedure.name}`,
+      text: `Confira o procedimento de ${procedure.name} na Biblioteca de Saúde.`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        if (onShowToast) onShowToast('Link copiado para a área de transferência!');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Error sharing:', error);
+      }
+    }
+  };
 
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
@@ -1970,6 +2028,15 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing }: 
           title="Baixar PDF"
         >
           {isDownloading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Download className="w-6 h-6" />}
+        </button>
+
+        <button
+          onClick={handleShare}
+          data-html2canvas-ignore
+          className="w-14 h-14 rounded-full bg-surface-container-high shadow-lg flex items-center justify-center text-on-surface active:scale-90 transition-all hover:bg-surface-container-low"
+          title="Compartilhar"
+        >
+          <Share2 className="w-6 h-6" />
         </button>
       </header>
 
@@ -3307,202 +3374,6 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
   );
 }
 
-function PaymentModal({ data, onClose, onSuccess, recordHistory }: { data: any, onClose: () => void, onSuccess: () => void, recordHistory?: (q: string, t?: string, m?: any) => Promise<void> }) {
-  useEffect(() => {
-    console.log('PaymentModal mounted with data:', {
-      amount: data?.amount,
-      method: data?.method,
-      hasReference: !!data?.reference
-    });
-  }, [data]);
-
-  if (!data) {
-    console.warn('PaymentModal: No data provided, returning null');
-    return null;
-  }
-  
-  const [phone, setPhone] = useState(data.phone || '');
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  const handleConfirm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 9) {
-      setError('Por favor, introduza um número de telefone válido (9 dígitos)');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setStatus('processing');
-
-    try {
-      console.log('Initiating payment confirmation for:', {
-        amount: data.amount,
-        reference: data.reference ? '***' : 'none',
-        method: data.method,
-        phone: phone ? `${phone.slice(0, 3)}***${phone.slice(-2)}` : 'none'
-      });
-
-      const response = await fetch('/api/v1/payments/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: data.amount,
-          reference: data.reference,
-          userId: data.userId,
-          method: data.method,
-          phone: phone
-        })
-      });
-
-      const responseText = await response.text();
-      console.log('Payment confirmation response status:', response.status);
-      
-      let result: any;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Failed to parse payment confirmation response:', responseText);
-        result = { message: responseText || 'Erro desconhecido no servidor' };
-      }
-      
-      if (response.ok) {
-        console.log('Payment confirmation successful');
-        setStatus('success');
-        if (recordHistory) {
-          recordHistory('Payment confirmed', 'payment_success', { 
-            method: data.method, 
-            amount: data.amount,
-            planId: data.planId
-          });
-        }
-      } else {
-        console.error('Payment confirmation failed:', result?.message || 'Unknown error');
-        throw new Error(result.message || result.error || 'Erro ao processar pagamento');
-      }
-    } catch (err: any) {
-      console.error('Payment confirmation error:', err.message || err);
-      const errorMsg = err.message || 'Ocorreu um erro inesperado ao processar o pagamento.';
-      setError(errorMsg);
-      setStatus('error');
-      if (recordHistory) {
-        recordHistory(errorMsg, 'payment_error', { 
-          method: data.method, 
-          amount: data.amount,
-          planId: data.planId
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-        className="w-full max-w-md bg-surface rounded-3xl shadow-2xl overflow-hidden border border-outline-variant/10"
-      >
-        <div className="bg-primary p-6 text-on-primary text-center relative">
-          <button 
-            onClick={onClose}
-            className="absolute right-4 top-4 p-2 hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <h2 className="text-2xl font-bold">Paylink</h2>
-          <p className="text-on-primary/80 text-sm mt-1">Pagamento Seguro e Rápido</p>
-        </div>
-        
-        <div className="p-8">
-          {status === 'success' ? (
-            <div className="text-center py-4">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-10 h-10 text-green-600" />
-              </div>
-              <h3 className="text-xl font-bold text-on-surface mb-2">Pedido Enviado!</h3>
-              <p className="text-on-surface-variant mb-8">
-                Por favor, verifique o seu telemóvel e introduza o seu PIN para confirmar o pagamento de <span className="font-bold text-on-surface">{data.amount} MT</span>.
-              </p>
-              <button 
-                onClick={onSuccess}
-                className="w-full py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg hover:shadow-primary/20 transition-all"
-              >
-                Entendido
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="text-center mb-8">
-                <span className="text-on-surface-variant text-sm uppercase tracking-wider font-semibold">Valor a Pagar</span>
-                <div className="text-4xl font-black text-on-surface mt-1">{data.amount} MT</div>
-              </div>
-
-              <form onSubmit={handleConfirm} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-on-surface-variant mb-2">Número de Telefone</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-medium">+258</span>
-                    <input 
-                      type="tel" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="84XXXXXXX" 
-                      required
-                      disabled={loading}
-                      className="w-full pl-16 pr-4 py-4 bg-surface-container border border-outline-variant/20 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-medium text-on-surface"
-                    />
-                  </div>
-                  <p className="text-xs text-on-surface-variant mt-2">
-                    Introduza o número da sua conta <span className="font-bold uppercase">{data.method}</span>
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="p-4 bg-error/10 border border-error/20 rounded-2xl text-error text-sm flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 shrink-0" />
-                    <p>{error}</p>
-                  </div>
-                )}
-
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-on-primary font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transform active:scale-95 transition-all flex items-center justify-center space-x-2"
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
-                      <span>Processando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Pagar Agora</span>
-                      <ArrowRight className="w-5 h-5" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <div className="mt-8 pt-6 border-t border-outline-variant/10 text-center">
-                <p className="text-xs text-on-surface-variant">
-                  Referência: <span className="font-mono font-medium">{data.reference}</span>
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
   return (
     <div className="flex items-start gap-4">
@@ -3528,8 +3399,32 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentData, setPaymentData] = useState<any>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [paymentMessage, setPaymentMessage] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    if (paymentStatus === 'processing' && profile?.id) {
+      pollInterval = setInterval(async () => {
+        console.log('Polling for subscription status...');
+        await onRefreshProfile();
+      }, 5000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [paymentStatus, profile?.id, onRefreshProfile]);
+
+  useEffect(() => {
+    if (paymentStatus === 'processing' && profile?.subscription_status === 'active') {
+      setPaymentStatus('success');
+      recordHistory('Subscription successful', 'subscription_success', { 
+        planId: selectedPlan?.id,
+        method: selectedMethod
+      }).catch(err => console.error('Error recording history:', err));
+    }
+  }, [profile?.subscription_status, paymentStatus, selectedPlan, selectedMethod, recordHistory]);
 
   useEffect(() => {
     console.log('SubscriptionScreen mounted/updated', { 
@@ -3587,7 +3482,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         recordHistory('Subscription successful', 'subscription_success', { 
           planId: selectedPlan?.id,
           method: selectedMethod
-        });
+        }).catch(err => console.error('Error recording history:', err));
         setTimeout(() => {
           onBack();
         }, 2000);
@@ -3639,23 +3534,14 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
     }
     
     setLoading(selectedPlan.id);
-    // Removed global setStatus('processing') to avoid premature overlay
-    // The button will show a spinner via the loading state
+    setPaymentStatus('processing');
+    setPaymentMessage('Iniciando o processo de pagamento...');
 
     try {
       setErrorMessage(null);
-      // Use relative URL for same-origin full-stack apps
-      console.log('Initiating payment request to:', `/api/v1/payments`);
-      console.log('Payment payload:', {
-        amount: selectedPlan.amount,
-        method: selectedMethod,
-        userId: profile?.id || '00000000-0000-0000-0000-000000000000',
-        planId: selectedPlan.id,
-        durationDays: selectedPlan.days,
-        phone: phoneNumber ? `${phoneNumber.slice(0, 3)}***${phoneNumber.slice(-2)}` : 'none'
-      });
+      console.log('Initiating payment request to:', `/api/v1/payments/process`);
       
-      const response = await fetch(`/api/v1/payments`, {
+      const response = await fetch(`/api/v1/payments/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -3672,7 +3558,6 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
 
       console.log('Payment response status:', response.status, response.statusText);
       const responseText = await response.text();
-      // console.log('Raw response text:', responseText); // Removed to avoid circular structure errors if response is weird
 
       let result;
       try {
@@ -3681,56 +3566,31 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         console.error("Non-JSON response from payment API");
         throw new Error(`Erro na resposta do servidor (não-JSON)`);
       }
-      console.log('Parsed payment response body:', result?.data ? { ...result.data, reference: '***' } : 'No data');
 
       if (!response.ok) {
-        throw new Error(result.message || result.error || `Falha ao criar pedido de pagamento (Status: ${response.status})`);
+        throw new Error(result.message || result.error || `Falha ao processar pagamento (Status: ${response.status})`);
       }
 
-      if (!result.data) {
-        console.error("No data returned from payment API");
-        throw new Error("O servidor não retornou os dados necessários para o pagamento.");
+      console.log('Payment initiated successfully:', result);
+      
+      setPaymentReference(result.reference);
+      setPaymentStatus('processing');
+      setPaymentMessage('Por favor, verifique o seu telemóvel para confirmar o pagamento. Receberá um pedido de STK Push.');
+      
+      if (recordHistory) {
+        await recordHistory('Payment initiated', 'payment_initiated', { 
+          method: selectedMethod, 
+          amount: selectedPlan.amount,
+          planId: selectedPlan.id
+        }).catch(err => console.error('Error recording history:', err));
       }
-
-      // Open the in-app payment modal
-      console.log("Setting payment data and showing modal. Data:", { 
-        hasRef: !!result.data?.reference, 
-        amount: result.data?.amount,
-        method: result.data?.method
-      });
       
-      // Clear loading state
-      setLoading(null);
-      setPaymentData({ ...result.data, planId: selectedPlan.id });
-      
-      // Use a small timeout to ensure UI is ready before showing modal
-      setTimeout(() => {
-        console.log("Triggering setShowPaymentModal(true)");
-        setShowPaymentModal(true);
-      }, 150);
-      return;
     } catch (error: any) {
       console.error('Subscription error:', error.message || error);
+      setErrorMessage(error.message || 'Ocorreu um erro ao processar a sua subscrição. Por favor, tente novamente.');
       setStatus('error');
-      
-      const msg = error.message || 'Ocorreu um erro ao processar o seu pedido.';
-      
-      // Record error history
-      recordHistory(msg, 'subscription_error', { 
-        planId: selectedPlan?.id, 
-        method: selectedMethod,
-        errorType: error instanceof TypeError ? 'network' : 'api'
-      });
-
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        setErrorMessage('Erro de rede: Não foi possível contactar o servidor. Verifique se a aplicação está online.');
-      } else {
-        setErrorMessage(msg);
-      }
-      // Only alert in dev or for the special user to avoid annoying regular users
-      if (isDev) {
-        alert(`Erro na Subscrição: ${msg}`);
-      }
+      setPaymentStatus('error');
+      setPaymentMessage(error.message || 'Erro ao processar pagamento');
     } finally {
       setLoading(null);
     }
@@ -3811,7 +3671,71 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
             animate={{ opacity: 1, y: 0 }}
             className="bg-surface-container-low rounded-[2rem] p-6 border border-outline-variant/10 space-y-6"
           >
-            <div className="space-y-4">
+            {/* Payment Status Overlay */}
+            {paymentStatus !== 'idle' && (
+              <div className="p-6 rounded-2xl bg-surface-variant/30 border border-outline-variant animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col items-center text-center">
+                  {paymentStatus === 'processing' && (
+                    <>
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      </div>
+                      <h3 className="text-xl font-bold text-on-surface mb-2">Aguardando Confirmação</h3>
+                      <p className="text-on-surface-variant max-w-md text-sm">
+                        {paymentMessage}
+                      </p>
+                      <div className="mt-4 p-3 bg-surface rounded-xl border border-outline-variant w-full max-w-xs">
+                        <p className="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-1">Referência</p>
+                        <p className="text-lg font-mono font-bold text-primary">{paymentReference}</p>
+                      </div>
+                      <p className="mt-6 text-[10px] text-on-surface-variant italic leading-relaxed">
+                        Não feche esta página. A sua subscrição será activada automaticamente assim que confirmar no telemóvel.
+                      </p>
+                    </>
+                  )}
+
+                  {paymentStatus === 'error' && (
+                    <>
+                      <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mb-4">
+                        <AlertCircle className="w-8 h-8 text-error" />
+                      </div>
+                      <h3 className="text-xl font-bold text-on-surface mb-2">Erro no Pagamento</h3>
+                      <p className="text-on-surface-variant mb-6 text-sm">
+                        {paymentMessage}
+                      </p>
+                      <button
+                        onClick={() => setPaymentStatus('idle')}
+                        className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-opacity text-sm"
+                      >
+                        Tentar Novamente
+                      </button>
+                    </>
+                  )}
+
+                  {paymentStatus === 'success' && (
+                    <>
+                      <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
+                        <CheckCircle2 className="w-8 h-8 text-success" />
+                      </div>
+                      <h3 className="text-xl font-bold text-on-surface mb-2">Pagamento Confirmado!</h3>
+                      <p className="text-on-surface-variant mb-6 text-sm">
+                        A sua subscrição foi activada com sucesso. Agora tem acesso total a todas as funcionalidades.
+                      </p>
+                      <button
+                        onClick={onBack}
+                        className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-opacity text-sm"
+                      >
+                        Começar a Usar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {paymentStatus === 'idle' && (
+              <>
+                <div className="space-y-4">
               <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Método de Pagamento</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -3884,8 +3808,10 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
                 </>
               )}
             </button>
+          </>
+        )}
 
-            {status === 'error' && errorMessage && (
+        {status === 'error' && errorMessage && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -4025,23 +3951,6 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
               )}
             </motion.div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Payment Modal */}
-      <AnimatePresence>
-        {showPaymentModal && paymentData && (
-          <PaymentModal 
-            data={paymentData} 
-            onClose={() => setShowPaymentModal(false)}
-            onSuccess={() => {
-              setShowPaymentModal(false);
-              setStatus('success');
-              onRefreshProfile().catch(err => console.error('Error refreshing profile:', err));
-              setTimeout(() => onBack(), 2000);
-            }}
-            recordHistory={recordHistory}
-          />
         )}
       </AnimatePresence>
     </div>
