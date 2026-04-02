@@ -128,6 +128,20 @@ async function startServer() {
     });
   });
 
+  // API Debug check (Verifica se as credenciais estão carregadas)
+  apiRouter.get("/debug/config", (req, res) => {
+    res.json({
+      hasClientId: !!CONFIG.E2PAYMENTS.CLIENT_ID,
+      clientIdPrefix: CONFIG.E2PAYMENTS.CLIENT_ID ? CONFIG.E2PAYMENTS.CLIENT_ID.substring(0, 5) + "..." : "missing",
+      hasSecret: !!CONFIG.E2PAYMENTS.CLIENT_SECRET,
+      hasWalletId: !!CONFIG.E2PAYMENTS.WALLET_ID,
+      walletId: CONFIG.E2PAYMENTS.WALLET_ID,
+      hasSupabaseUrl: !!CONFIG.SUPABASE.URL,
+      hasSupabaseKey: !!CONFIG.SUPABASE.SERVICE_KEY,
+      env: process.env.NODE_ENV || "development"
+    });
+  });
+
   // API route to process a payment (Create reference + STK Push)
   apiRouter.post("/v1/payments/process", async (req, res) => {
     console.log("Received /api/v1/payments/process request:", req.body);
@@ -199,24 +213,34 @@ async function startServer() {
       });
 
       const responseText = await response.text();
+      console.log(`e2Payments STK Push response status: ${response.status}`);
+      
       let data: any;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        data = { message: responseText.includes('<html') ? "Erro no servidor de pagamentos" : responseText };
+        console.error("Failed to parse e2Payments response as JSON:", responseText);
+        data = { message: responseText.includes('<html') ? "Erro interno no servidor de pagamentos (HTML)" : responseText };
       }
 
       if (!response.ok) {
+        console.error("e2Payments STK Push failed:", data);
         return res.status(response.status === 403 ? 400 : response.status).json({
-          error: "Erro no Pagamento",
-          message: data.message || data.error || "A API de pagamentos recusou o pedido."
+          error: "Erro no STK Push",
+          message: data.message || data.error || "A API de pagamentos recusou o pedido de STK Push.",
+          details: data
         });
       }
 
+      console.log("STK Push initiated successfully");
       res.json({ status: "success", reference, data });
     } catch (error: any) {
-      console.error("Payment process error:", error);
-      res.status(500).json({ error: "Internal server error", message: error.message });
+      console.error("Payment process critical error:", error);
+      res.status(500).json({ 
+        error: "Erro Crítico no Processamento", 
+        message: error.message,
+        stage: error.message.includes("token") ? "Obtenção de Token" : "Iniciação de Pagamento"
+      });
     }
   });
 
