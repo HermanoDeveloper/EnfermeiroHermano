@@ -9,16 +9,35 @@ import crypto from "crypto";
 
 dotenv.config();
 
+// =============================================================================
+// CONFIGURAÇÃO DE CREDENCIAIS (Pode preencher aqui se as variáveis de ambiente falharem)
+// =============================================================================
+const CONFIG = {
+  E2PAYMENTS: {
+    CLIENT_ID: process.env.E2PAYMENTS_CLIENT_ID || "huiOQn2L3dvnIZ7f2vbG6E6033bvoHUnetXPLWlr",
+    CLIENT_SECRET: process.env.E2PAYMENTS_CLIENT_SECRET || "a1682097-7429-4bb2-80a1-c941f776a487",
+    WALLET_ID: process.env.E2PAYMENTS_WALLET_ID || "243004",
+    MPESA_WALLET_ID: process.env.E2PAYMENTS_MPESA_WALLET_ID || "243004",
+    EMOLA_WALLET_ID: process.env.E2PAYMENTS_EMOLA_WALLET_ID || "243004",
+    MKESH_WALLET_ID: process.env.E2PAYMENTS_MKESH_WALLET_ID || "243004",
+    CALLBACK_URL: process.env.E2PAYMENTS_CALLBACK_URL || ""
+  },
+  SUPABASE: {
+    URL: process.env.VITE_SUPABASE_URL || "",
+    SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+  },
+  APP_URL: process.env.APP_URL || ""
+};
+// =============================================================================
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = CONFIG.SUPABASE.URL;
+const supabaseServiceKey = CONFIG.SUPABASE.SERVICE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error("CRITICAL: Supabase environment variables are missing!");
-  console.log("VITE_SUPABASE_URL:", supabaseUrl ? "Present" : "Missing");
-  console.log("SUPABASE_SERVICE_ROLE_KEY:", supabaseServiceKey ? "Present" : "Missing");
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -32,11 +51,11 @@ async function getE2Token() {
     return e2Token;
   }
 
-  const clientId = process.env.E2PAYMENTS_CLIENT_ID;
-  const clientSecret = process.env.E2PAYMENTS_CLIENT_SECRET;
+  const clientId = CONFIG.E2PAYMENTS.CLIENT_ID;
+  const clientSecret = CONFIG.E2PAYMENTS.CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error("Credenciais e2Payments não configuradas no servidor.");
+    throw new Error("Credenciais e2Payments não configuradas no servidor. Verifique o objeto CONFIG no server.ts");
   }
 
   try {
@@ -79,11 +98,11 @@ async function startServer() {
   const PORT = 3000;
 
   console.log('Server initialization:', {
-    hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
-    hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasE2Credentials: !!process.env.E2PAYMENTS_CLIENT_ID && !!process.env.E2PAYMENTS_CLIENT_SECRET,
-    appUrl: process.env.APP_URL,
-    callbackUrl: process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null)
+    hasSupabaseUrl: !!CONFIG.SUPABASE.URL,
+    hasSupabaseKey: !!CONFIG.SUPABASE.SERVICE_KEY,
+    hasE2Credentials: !!CONFIG.E2PAYMENTS.CLIENT_ID && !!CONFIG.E2PAYMENTS.CLIENT_SECRET,
+    appUrl: CONFIG.APP_URL,
+    callbackUrl: CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null)
   });
 
   // Enable CORS for all origins
@@ -140,21 +159,21 @@ async function startServer() {
       }
 
       const token = await getE2Token();
-      const walletId = process.env[`E2PAYMENTS_${method.toUpperCase()}_WALLET_ID`] || process.env.E2PAYMENTS_WALLET_ID;
+      const walletId = CONFIG.E2PAYMENTS[`${method.toUpperCase()}_WALLET_ID`] || CONFIG.E2PAYMENTS.WALLET_ID;
       
       if (!walletId) {
         console.error(`Wallet ID missing for method: ${method}`);
-        return res.status(400).json({ error: "Configuração de carteira em falta" });
+        return res.status(400).json({ error: "Configuração de carteira em falta no objeto CONFIG" });
       }
 
       const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
       const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
       const formattedPhone = phone.replace(/\D/g, '').slice(-9);
 
-      const callbackUrl = process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null);
+      const callbackUrl = CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null);
 
       const payload: any = {
-        client_id: process.env.E2PAYMENTS_CLIENT_ID,
+        client_id: CONFIG.E2PAYMENTS.CLIENT_ID,
         amount: amount.toString(),
         phone: formattedPhone,
         reference: reference
@@ -276,23 +295,23 @@ async function startServer() {
       }
 
       const token = await getE2Token();
-      const walletId = process.env[`E2PAYMENTS_${method.toUpperCase()}_WALLET_ID`] || process.env.E2PAYMENTS_WALLET_ID;
+      const walletId = CONFIG.E2PAYMENTS[`${method.toUpperCase()}_WALLET_ID`] || CONFIG.E2PAYMENTS.WALLET_ID;
       
       console.log(`Using wallet ID for ${method}: ${walletId}`);
       
       if (!walletId) {
         console.error(`Wallet ID missing for method: ${method}`);
-        return res.status(400).json({ error: "Configuração de carteira em falta para este método" });
+        return res.status(400).json({ error: "Configuração de carteira em falta para este método no objeto CONFIG" });
       }
 
       const paymentMethod = method === 'mpesa' ? 'mpesa' : (method === 'emola' ? 'emola' : 'mkesh');
       const endpoint = `https://e2payments.explicador.co.mz/v1/c2b/${paymentMethod}-payment/${walletId}`;
       const formattedPhone = phone.replace(/\D/g, '').slice(-9);
 
-      const callbackUrl = process.env.E2PAYMENTS_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook` : null);
+      const callbackUrl = CONFIG.E2PAYMENTS.CALLBACK_URL || (CONFIG.APP_URL ? `${CONFIG.APP_URL}/webhook` : null);
 
       const payload: any = {
-        client_id: process.env.E2PAYMENTS_CLIENT_ID,
+        client_id: CONFIG.E2PAYMENTS.CLIENT_ID,
         amount: amount.toString(),
         phone: formattedPhone,
         reference: reference
@@ -548,8 +567,8 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    if (!process.env.E2PAYMENTS_CLIENT_ID || !process.env.E2PAYMENTS_CLIENT_SECRET) {
-      console.warn("WARNING: E2PAYMENTS credentials are not fully set. Payments will not work.");
+    if (!CONFIG.E2PAYMENTS.CLIENT_ID || !CONFIG.E2PAYMENTS.CLIENT_SECRET) {
+      console.warn("WARNING: E2PAYMENTS credentials are not fully set in CONFIG. Payments will not work.");
     }
   });
 }
