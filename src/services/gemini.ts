@@ -109,11 +109,13 @@ const PROCEDURE_SCHEMA = {
   required: ["name", "category", "concept", "materials", "procedureSteps"]
 };
 
-// Lazy initialization
-let aiInstance: GoogleGenAI | null = null;
-
 // Helper to get the API key from various possible sources
 const getApiKey = () => {
+  if (typeof window !== 'undefined' && (window as any).__RUNTIME_ENV__) {
+    const env = (window as any).__RUNTIME_ENV__;
+    if (env.GEMINI_API_KEY) return env.GEMINI_API_KEY;
+  }
+
   return (
     process.env.GEMINI_API_KEY ||
     import.meta.env.VITE_GEMINI_API_KEY ||
@@ -128,16 +130,13 @@ const getApiKey = () => {
 export const isAIConfigured = !!getApiKey();
 
 function getAI() {
-  if (!aiInstance) {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      const error = new Error("GEMINI_API_KEY is missing.");
-      (error as any).isApiKeyMissing = true;
-      throw error;
-    }
-    aiInstance = new GoogleGenAI({ apiKey });
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    const error = new Error("GEMINI_API_KEY is missing.");
+    (error as any).isApiKeyMissing = true;
+    throw error;
   }
-  return aiInstance;
+  return new GoogleGenAI({ apiKey });
 }
 
 export interface AIResponse {
@@ -161,7 +160,8 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: ASSISTANT_SCHEMA
+        responseSchema: ASSISTANT_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
 
@@ -174,7 +174,7 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
       suggestions: result.suggestions
     };
   } catch (error: any) {
-    console.error("AI Service Error:", error);
+    console.error("AI Service Error (askAI):", error);
     const errorMessage = error?.message || "";
     
     if (error?.isApiKeyMissing || errorMessage.includes("API_KEY")) {
@@ -186,7 +186,7 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
 
     if (errorMessage.includes("quota") || errorMessage.includes("429")) {
       return {
-        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. Por favor, aguarde alguns minutos.",
+        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. Por favor, aguarde alguns minutos ou atualize seu plano para acesso ilimitado.",
         suggestions: ["Ver planos", "Tentar mais tarde"]
       };
     }
@@ -230,7 +230,8 @@ ${MEDICATION_FORM_TEXT}
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: DISEASE_SCHEMA
+        responseSchema: DISEASE_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
 
@@ -268,7 +269,8 @@ ${NURSING_MANUAL_TEXT}
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: PROCEDURE_SCHEMA
+        responseSchema: PROCEDURE_SCHEMA,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
 

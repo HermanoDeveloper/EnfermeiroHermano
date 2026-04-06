@@ -216,7 +216,11 @@ export default function App() {
     if (!searchQuery.trim()) return;
     
     try {
-      await recordHistory(searchQuery, 'search').catch(err => console.error('Error recording history:', err));
+      try {
+        await recordHistory(searchQuery, 'search');
+      } catch (err) {
+        console.error('Error recording history:', err);
+      }
 
       // If we are on diseases screen or home, we can trigger AI search for diseases
       if (currentScreen === 'diseases' || currentScreen === 'home') {
@@ -229,7 +233,11 @@ export default function App() {
               return [result, ...prev];
             });
             setSelectedDisease(result);
-            await recordHistory(result.name, 'view', { id: result.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
+            try {
+              await recordHistory(result.name, 'view', { id: result.id, category: 'disease' });
+            } catch (err) {
+              console.error('Error recording history:', err);
+            }
             setCurrentScreen('disease-detail');
           } else {
             showToast('Não foi possível encontrar informações detalhadas sobre esta doença no momento.', 'error');
@@ -255,7 +263,11 @@ export default function App() {
               return [result, ...prev];
             });
             setSelectedProcedure(result);
-            await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
+            try {
+              await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' });
+            } catch (err) {
+              console.error('Error recording history:', err);
+            }
             setCurrentScreen('procedure-detail');
           } else {
             showToast('Não foi possível encontrar detalhes sobre este procedimento no momento.', 'error');
@@ -305,18 +317,21 @@ export default function App() {
           return [result, ...prev];
         });
         setSelectedProcedure(result);
-        await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
+        await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' })
+          .catch(err => console.error('Error recording history:', err));
       } else {
         // Fallback to local data if AI fails
         setSelectedProcedure(procedure);
-        await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
+        await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' })
+          .catch(err => console.error('Error recording history:', err));
         showToast('Usando dados locais (IA indisponível).', 'error');
       }
       setCurrentScreen('procedure-detail');
     } catch (error) {
       console.error("Select Procedure AI failed", error);
       setSelectedProcedure(procedure);
-      await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
+      await recordHistory(procedure.name, 'view', { id: procedure.id, category: 'procedure' })
+        .catch(err => console.error('Error recording history:', err));
       setCurrentScreen('procedure-detail');
       showToast('Erro na IA. Usando dados locais.', 'error');
     } finally {

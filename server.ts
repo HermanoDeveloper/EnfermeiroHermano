@@ -402,11 +402,30 @@ async function startServer() {
     app.use(express.static(distPath, { index: false }));
     
     // Catch-all para SPA: Apenas para GET e caminhos que NÃO começam por /api
-    app.get("*", (req, res, next) => {
+    app.get("*", async (req, res, next) => {
       if (req.url.startsWith("/api") || req.url.startsWith("/webhook")) {
         return next();
       }
-      res.sendFile(path.join(distPath, "index.html"));
+      
+      try {
+        const fs = await import('fs/promises');
+        let html = await fs.readFile(path.join(distPath, "index.html"), 'utf-8');
+        
+        // Inject runtime environment variables
+        const runtimeEnv = {
+          GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
+          VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || '',
+          VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || ''
+        };
+        
+        const scriptTag = `<script>window.__RUNTIME_ENV__ = ${JSON.stringify(runtimeEnv)};</script>`;
+        html = html.replace('</head>', `${scriptTag}</head>`);
+        
+        res.send(html);
+      } catch (err) {
+        console.error("Error serving index.html:", err);
+        res.sendFile(path.join(distPath, "index.html"));
+      }
     });
   }
 

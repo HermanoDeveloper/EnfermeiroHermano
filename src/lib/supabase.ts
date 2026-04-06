@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL;
-const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const getEnvVar = (key: string, fallback: string | undefined = undefined) => {
+  if (typeof window !== 'undefined' && (window as any).__RUNTIME_ENV__) {
+    const env = (window as any).__RUNTIME_ENV__;
+    if (env[key]) return env[key];
+  }
+  return import.meta.env[key] || fallback;
+};
+
+const rawUrl = getEnvVar('VITE_SUPABASE_URL');
+const rawKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
 const normalizeUrl = (url: string | undefined): string | null => {
   if (!url || url.trim() === '' || url.includes('placeholder') || url.includes('your-project')) return null;
