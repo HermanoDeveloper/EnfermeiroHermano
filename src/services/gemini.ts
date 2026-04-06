@@ -112,11 +112,24 @@ const PROCEDURE_SCHEMA = {
 // Lazy initialization
 let aiInstance: GoogleGenAI | null = null;
 
-export const isAIConfigured = !!process.env.GEMINI_API_KEY;
+// Helper to get the API key from various possible sources
+const getApiKey = () => {
+  return (
+    process.env.GEMINI_API_KEY ||
+    import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.GEMINI_API_KEY ||
+    process.env.API_KEY ||
+    import.meta.env.VITE_API_KEY ||
+    import.meta.env.API_KEY ||
+    ''
+  );
+};
+
+export const isAIConfigured = !!getApiKey();
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = getApiKey();
     if (!apiKey) {
       const error = new Error("GEMINI_API_KEY is missing.");
       (error as any).isApiKeyMissing = true;
@@ -143,13 +156,12 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
     const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
 
     const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: ASSISTANT_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: ASSISTANT_SCHEMA
       }
     });
 
@@ -212,14 +224,13 @@ ${MEDICATION_FORM_TEXT}
 `;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: DISEASE_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: DISEASE_SCHEMA
       }
     });
 
@@ -251,14 +262,13 @@ ${NURSING_MANUAL_TEXT}
 `;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: PROCEDURE_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: PROCEDURE_SCHEMA
       }
     });
 
