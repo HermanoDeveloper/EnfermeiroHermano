@@ -215,59 +215,65 @@ export default function App() {
   const handleGlobalSearch = async () => {
     if (!searchQuery.trim()) return;
     
-    await recordHistory(searchQuery, 'search').catch(err => console.error('Error recording history:', err));
+    try {
+      await recordHistory(searchQuery, 'search').catch(err => console.error('Error recording history:', err));
 
-    // If we are on diseases screen or home, we can trigger AI search for diseases
-    if (currentScreen === 'diseases' || currentScreen === 'home') {
-      setIsSearchingAI(true);
-      try {
-        const result = await searchDiseaseAI(searchQuery);
-        if (result) {
-          setDiseases(prev => {
-            if (prev.find(d => d.id === result.id)) return prev;
-            return [result, ...prev];
-          });
-          setSelectedDisease(result);
-          await recordHistory(result.name, 'view', { id: result.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
-          setCurrentScreen('disease-detail');
-        } else {
-          showToast('Não foi possível encontrar informações detalhadas sobre esta doença no momento.', 'error');
+      // If we are on diseases screen or home, we can trigger AI search for diseases
+      if (currentScreen === 'diseases' || currentScreen === 'home') {
+        setIsSearchingAI(true);
+        try {
+          const result = await searchDiseaseAI(searchQuery);
+          if (result) {
+            setDiseases(prev => {
+              if (prev.find(d => d.id === result.id)) return prev;
+              return [result, ...prev];
+            });
+            setSelectedDisease(result);
+            await recordHistory(result.name, 'view', { id: result.id, category: 'disease' }).catch(err => console.error('Error recording history:', err));
+            setCurrentScreen('disease-detail');
+          } else {
+            showToast('Não foi possível encontrar informações detalhadas sobre esta doença no momento.', 'error');
+          }
+        } catch (error: any) {
+          console.error("Global AI Search failed", error);
+          const errorMsg = error?.message || "";
+          if (errorMsg.includes("GEMINI_API_KEY")) {
+            showToast('Erro de Configuração: Chave da IA não encontrada.', 'error');
+          } else {
+            showToast('Ocorreu um erro ao pesquisar com IA. Tente novamente.', 'error');
+          }
+        } finally {
+          setIsSearchingAI(false);
         }
-      } catch (error: any) {
-        console.error("Global AI Search failed", error);
-        const errorMsg = error?.message || "";
-        if (errorMsg.includes("GEMINI_API_KEY")) {
-          showToast('Erro de Configuração: Chave da IA não encontrada.', 'error');
-        } else {
-          showToast('Ocorreu um erro ao pesquisar com IA. Tente novamente.', 'error');
+      } else if (currentScreen === 'procedures') {
+        setIsSearchingAI(true);
+        try {
+          const result = await searchProcedureAI(searchQuery);
+          if (result) {
+            setProcedures(prev => {
+              if (prev.find(p => p.id === result.id)) return prev;
+              return [result, ...prev];
+            });
+            setSelectedProcedure(result);
+            await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
+            setCurrentScreen('procedure-detail');
+          } else {
+            showToast('Não foi possível encontrar detalhes sobre este procedimento no momento.', 'error');
+          }
+        } catch (error) {
+          console.error("Global AI Procedure Search failed", error);
+          showToast('Ocorreu um erro ao pesquisar o procedimento com IA.', 'error');
+        } finally {
+          setIsSearchingAI(false);
         }
-      } finally {
-        setIsSearchingAI(false);
+      } else {
+        // For other screens, just navigate to diseases with the query
+        setCurrentScreen('diseases');
       }
-    } else if (currentScreen === 'procedures') {
-      setIsSearchingAI(true);
-      try {
-        const result = await searchProcedureAI(searchQuery);
-        if (result) {
-          setProcedures(prev => {
-            if (prev.find(p => p.id === result.id)) return prev;
-            return [result, ...prev];
-          });
-          setSelectedProcedure(result);
-          await recordHistory(result.name, 'view', { id: result.id, category: 'procedure' }).catch(err => console.error('Error recording history:', err));
-          setCurrentScreen('procedure-detail');
-        } else {
-          showToast('Não foi possível encontrar detalhes sobre este procedimento no momento.', 'error');
-        }
-      } catch (error) {
-        console.error("Global AI Procedure Search failed", error);
-        showToast('Ocorreu um erro ao pesquisar o procedimento com IA.', 'error');
-      } finally {
-        setIsSearchingAI(false);
-      }
-    } else {
-      // For other screens, just navigate to diseases with the query
-      setCurrentScreen('diseases');
+    } catch (err) {
+      console.error('Global search error:', err);
+      showToast('Ocorreu um erro ao realizar a pesquisa.', 'error');
+      setIsSearchingAI(false);
     }
   };
 
@@ -356,7 +362,7 @@ export default function App() {
       }
     };
 
-    initSession();
+    initSession().catch(err => console.error('Error in initSession:', err));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
