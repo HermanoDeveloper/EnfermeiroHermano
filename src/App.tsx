@@ -3415,14 +3415,14 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
 
   const plans = [
     { 
-      id: 'weekly', 
-      name: 'Semanal', 
+      id: 'biweekly', 
+      name: 'Quinzenal', 
       price: '30 MZN', 
       amount: 30,
-      duration: '7 dias',
+      duration: '15 dias',
       description: 'Ideal para consultas rápidas e pontuais.',
       icon: <Clock className="w-6 h-6" />,
-      days: 7
+      days: 15
     },
     { 
       id: 'monthly', 
@@ -3438,13 +3438,13 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
     { 
       id: 'quarterly', 
       name: 'Trimestral', 
-      price: '105 MZN', 
-      amount: 105,
+      price: '127.5 MZN', 
+      amount: 127.5,
       duration: '90 dias',
-      description: 'Economize 30% com o plano de longa duração.',
+      description: 'Economize 15% com o plano de longa duração.',
       icon: <ShieldCheck className="w-6 h-6" />,
       days: 90,
-      discount: '30% OFF'
+      discount: '15% OFF'
     }
   ];
 

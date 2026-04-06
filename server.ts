@@ -14,8 +14,8 @@ dotenv.config();
 // =============================================================================
 const CONFIG = {
   E2PAYMENTS: {
-    CLIENT_ID: process.env.E2PAYMENTS_CLIENT_ID || "huiOQn2L3dvnIZ7f2vbG6E6033bvoHUnetXPLWlr",
-    CLIENT_SECRET: process.env.E2PAYMENTS_CLIENT_SECRET || "a1682097-7429-4bb2-80a1-c941f776a487",
+    CLIENT_ID: process.env.E2PAYMENTS_CLIENT_ID || "a1682097-7429-4bb2-80a1-c941f776a487",
+    CLIENT_SECRET: process.env.E2PAYMENTS_CLIENT_SECRET || "huiOQn2L3dvnIZ7f2vbG6E6033bvoHUnetXPLWlr",
     WALLET_ID: process.env.E2PAYMENTS_WALLET_ID || "243004",
     MPESA_WALLET_ID: process.env.E2PAYMENTS_MPESA_WALLET_ID || "243004",
     EMOLA_WALLET_ID: process.env.E2PAYMENTS_EMOLA_WALLET_ID || "243004",
