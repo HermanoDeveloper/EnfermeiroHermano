@@ -76,12 +76,19 @@ async function getE2Token() {
     });
 
     const responseText = await response.text();
-    if (!response.ok) {
-      console.error("e2Payments token error:", responseText);
-      throw new Error(`Erro ao obter token: ${response.status} ${response.statusText}`);
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error("Non-JSON response from e2Payments token API:", responseText);
+      throw new Error(`Erro na resposta do servidor de token (não-JSON): ${responseText.slice(0, 100)}`);
     }
 
-    const data = JSON.parse(responseText);
+    if (!response.ok) {
+      console.error("e2Payments token error:", data);
+      throw new Error(`Erro ao obter token: ${response.status} ${data.message || response.statusText}`);
+    }
+
     const tokenType = data.token_type || 'Bearer';
     e2Token = `${tokenType} ${data.access_token}`;
     // Buffer de 60 segundos para expiração
@@ -223,13 +230,6 @@ async function startServer() {
 
   // Mount API Router
   app.use("/api", apiRouter);
-
-  // Webhook endpoint (Root level for easier access)
-  app.post("/webhook", async (req, res) => {
-    console.log("Webhook received:", req.body);
-    // ... (lógica do webhook mantida)
-    res.json({ received: true });
-  });
 
   // Health check (Root level)
   app.get("/health", (req, res) => res.json({ status: "ok" }));

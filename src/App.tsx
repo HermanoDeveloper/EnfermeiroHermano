@@ -598,6 +598,7 @@ export default function App() {
       );
     }
 
+    /* 
     if (isLoggedIn && !isDev && currentScreen !== 'subscription' && currentScreen !== 'profile') {
       const isTrial = profile?.subscription_status === 'trial';
       const isActive = profile?.subscription_status === 'active';
@@ -608,6 +609,7 @@ export default function App() {
         return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} recordHistory={recordHistory} />;
       }
     }
+    */
 
     switch (currentScreen) {
       case 'home':
@@ -2289,10 +2291,6 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
         // Update profile with extra info
         const birthDate = birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null;
         
-        // 5-day free trial
-        const trialExpiry = new Date();
-        trialExpiry.setDate(trialExpiry.getDate() + 5);
-
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -2304,9 +2302,9 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
             other_category: otherCategory,
             phone: `${selectedCountry.code} ${phone}`,
             address,
-            subscription_status: 'trial',
-            subscription_expiry: trialExpiry.toISOString(),
-            subscription_plan: 'trial'
+            subscription_status: 'active', // Set to active by default for now
+            subscription_expiry: null,
+            subscription_plan: 'free'
           });
 
         if (profileError) {
@@ -3076,51 +3074,7 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
         )}
       </section>
 
-      <section className="space-y-4">
-        <h3 className="font-headline text-lg font-bold text-on-surface px-2">Subscrição</h3>
-        <div className="bg-surface-container-lowest rounded-[2rem] p-6 ambient-shadow border border-outline-variant/10 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                profile?.subscription_status === 'active' ? "bg-green-500/10 text-green-600" : 
-                profile?.subscription_status === 'trial' ? "bg-primary/10 text-primary" : 
-                "bg-error/10 text-error"
-              )}>
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Status Atual</p>
-                <p className="text-sm font-bold text-on-surface">
-                  {profile?.subscription_status === 'active' ? 'Plano Ativo' : 
-                   profile?.subscription_status === 'trial' ? 'Período de Teste' : 
-                   'Subscrição Expirada'}
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => onNavigate('subscription')}
-              className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold hover:bg-primary/20 transition-all"
-            >
-              Gerir
-            </button>
-          </div>
-
-          {(profile?.subscription_status === 'active' || profile?.subscription_status === 'trial') && (
-            <div className="flex items-center gap-4 pt-2 border-t border-outline-variant/10">
-              <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                <Calendar className="w-5 h-5 text-on-surface-variant" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Válido até</p>
-                <p className="text-sm font-medium text-on-surface">
-                  {profile?.subscription_expiry ? new Date(profile.subscription_expiry).toLocaleDateString() : 'N/A'}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
+      {/* Subscription section removed for now */}
 
       <section className="space-y-4">
         <h3 className="font-headline text-lg font-bold text-on-surface px-2">Informações da Conta</h3>
@@ -3408,7 +3362,11 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
     if (paymentStatus === 'processing' && profile?.id) {
       pollInterval = setInterval(async () => {
         console.log('Polling for subscription status...');
-        await onRefreshProfile();
+        try {
+          await onRefreshProfile();
+        } catch (err) {
+          console.error('Error refreshing profile during polling:', err);
+        }
       }, 5000);
     }
     return () => {
