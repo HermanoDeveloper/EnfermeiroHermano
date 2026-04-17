@@ -58,7 +58,8 @@ import {
   RefreshCw,
   XCircle,
   Share2,
-  Loader2
+  Loader2,
+  CreditCard
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -619,9 +620,8 @@ export default function App() {
       );
     }
 
-    /* 
-    if (isLoggedIn && !isDev && currentScreen !== 'subscription' && currentScreen !== 'profile') {
-      const isTrial = profile?.subscription_status === 'trial';
+    if (isLoggedIn && !isDevEnv && currentScreen !== 'subscription' && currentScreen !== 'profile') {
+      const isTrial = profile?.subscription_status === 'trialing';
       const isActive = profile?.subscription_status === 'active';
       const expiry = profile?.subscription_expiry ? new Date(profile.subscription_expiry) : null;
       const isExpired = expiry ? expiry < new Date() : true;
@@ -630,7 +630,6 @@ export default function App() {
         return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} recordHistory={recordHistory} />;
       }
     }
-    */
 
     switch (currentScreen) {
       case 'home':
@@ -799,6 +798,7 @@ export default function App() {
                 <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Doutor IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
                 <SidebarItem icon={<Activity className="w-5 h-5" />} label="Protocolos Clínicos" onClick={() => { setCurrentScreen('diseases'); setIsSidebarOpen(false); }} active={currentScreen === 'diseases'} />
                 <SidebarItem icon={<Stethoscope className="w-5 h-5" />} label="Procedimentos" onClick={() => { setCurrentScreen('procedures'); setIsSidebarOpen(false); }} active={currentScreen === 'procedures'} />
+                <SidebarItem icon={<CreditCard className="w-5 h-5" />} label="Subscrição" onClick={() => { setCurrentScreen('subscription'); setIsSidebarOpen(false); }} active={currentScreen === 'subscription'} />
                 
                 <div className="pt-4 pb-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-outline px-4 mb-4">Personalização</p>
@@ -2312,6 +2312,9 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
         // Update profile with extra info
         const birthDate = birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null;
         
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 5);
+
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -2323,9 +2326,9 @@ function SignupScreen({ onNavigate, onLogin, onRefreshProfile }: { onNavigate: (
             other_category: otherCategory,
             phone: `${selectedCountry.code} ${phone}`,
             address,
-            subscription_status: 'active', // Set to active by default for now
-            subscription_expiry: null,
-            subscription_plan: 'free'
+            subscription_status: 'trialing',
+            subscription_expiry: expiryDate.toISOString(),
+            subscription_plan: 'trial'
           });
 
         if (profileError) {
@@ -3237,6 +3240,22 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div 
+          onClick={() => onNavigate('subscription')}
+          className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-tertiary-fixed/30 flex items-center justify-center">
+            <CreditCard className="w-6 h-6 text-tertiary" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-on-surface">Subscrição</h4>
+            <p className="text-xs text-on-surface-variant">
+              {profile?.subscription_status === 'trialing' ? 'Período de Teste' : (profile?.subscription_status === 'active' ? 'Plano Ativo' : 'Gerenciar Plano')}
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-on-surface-variant" />
+        </div>
+
         <div 
           onClick={() => onNavigate('notifications')}
           className="bg-surface-container-low p-6 rounded-3xl flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-all ambient-shadow border border-outline-variant/5"
