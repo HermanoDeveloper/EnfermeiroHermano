@@ -59,7 +59,9 @@ import {
   XCircle,
   Share2,
   Loader2,
-  CreditCard
+  CreditCard,
+  Copy,
+  Check
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -3477,576 +3479,338 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode, label: st
   );
 }
 
+const getPaymentLogo = (id: string) => {
+  switch (id) {
+    case 'mpesa':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm shrink-0">
+          <rect width="100" height="100" fill="#E61C25" />
+          {/* Smartphone outline */}
+          <rect x="32" y="16" width="36" height="68" rx="6" fill="none" stroke="#FFFFFF" strokeWidth="4.5" />
+          <line x1="45" y1="22" x2="55" y2="22" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="46" y="74" width="8" height="4" rx="1.5" fill="#FFFFFF" />
+          {/* Green flying paper/leaf */}
+          <path d="M15,48 Q45,53 78,38 Q45,33 15,48" fill="#00A859" />
+          <path d="M15,48 Q45,53 78,38 Q45,43 15,48" fill="#3D8B37" opacity="0.4" />
+          {/* MZ Text */}
+          <text x="66" y="80" fill="#FFFFFF" fontSize="12" fontWeight="900" fontFamily="sans-serif">MZ</text>
+        </svg>
+      );
+    case 'emola':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm shrink-0">
+          <rect width="100" height="100" fill="#F7941D" />
+          {/* Smartphone outline */}
+          <rect x="24" y="14" width="22" height="38" rx="3" fill="none" stroke="#FFFFFF" strokeWidth="3" />
+          {/* Antenna */}
+          <line x1="31" y1="14" x2="31" y2="10" stroke="#FFFFFF" strokeWidth="2" />
+          <path d="M28,8 Q31,5 34,8" fill="none" stroke="#FFFFFF" strokeWidth="1.5" />
+          {/* Banknotes */}
+          <g transform="rotate(22 50 26)">
+            <rect x="42" y="14" width="26" height="14" rx="1" fill="#FFFFFF" />
+            <text x="55" y="24" fill="#F7941D" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">$</text>
+          </g>
+          {/* e-Mola Text */}
+          <text x="50" y="72" fill="#FFFFFF" fontSize="15" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">e-Mola</text>
+          {/* Slogan */}
+          <text x="50" y="84" fill="#FFFFFF" fontSize="6.5" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" opacity="0.9">Meu cell, minha mola</text>
+        </svg>
+      );
+    case 'mkesh':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm shrink-0">
+          <rect width="100" height="100" fill="#FFCC00" />
+          {/* Green mobile phone */}
+          <rect x="36" y="12" width="28" height="46" rx="5" fill="#00A859" />
+          {/* Screen */}
+          <rect x="40" y="18" width="20" height="26" rx="2" fill="#FFCC00" />
+          {/* :$ Symbol inside screen */}
+          <text x="50" y="36" fill="#00A859" fontSize="14" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">:$</text>
+          {/* Button */}
+          <circle cx="50" cy="51" r="2.5" fill="#FFCC00" />
+          {/* mkesh Text */}
+          <text x="50" y="80" fill="#00A859" fontSize="15" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">mkesh</text>
+        </svg>
+      );
+    case 'paypal':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm bg-white p-1.5 shrink-0">
+          {/* Overlapping Ps of PayPal */}
+          <g transform="translate(10, 2)">
+            {/* Back P (Darker blue) */}
+            <path d="M22,12 L48,12 C58,12 64,17 62,28 C60,38 52,47 42,47 L30,47 L22,82 L10,82 L22,12 Z" fill="#003087" />
+            {/* Front P (Lighter blue) */}
+            <path d="M34,24 L60,24 C70,24 76,29 74,40 C72,50 64,59 54,59 L42,59 L34,94 L22,94 L34,24 Z" fill="#0079C1" opacity="0.95" />
+          </g>
+        </svg>
+      );
+    case 'airtm':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm bg-white p-1 shrink-0">
+          <defs>
+            <linearGradient id="airtm-rainbow" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#FF3B30" />
+              <stop offset="30%" stopColor="#FF9500" />
+              <stop offset="60%" stopColor="#4CD964" />
+              <stop offset="100%" stopColor="#5AC8FA" />
+            </linearGradient>
+          </defs>
+          {/* Stylized A shape */}
+          <path d="M50,15 L82,68 L68,68 L50,38 L32,68 L18,68 L50,15 Z" fill="#2173FF" />
+          {/* Inner crossbar / rainbow overlay */}
+          <path d="M41,53 L59,53 L50,38 L41,53 Z" fill="url(#airtm-rainbow)" />
+          {/* Supporting shadow/accents */}
+          <path d="M32,68 L50,56 L68,68 L50,54 L32,68 Z" fill="#0055D4" opacity="0.2" />
+        </svg>
+      );
+    case 'binance':
+      return (
+        <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm bg-[#121212] p-2 shrink-0">
+          {/* Binance Diamond Logo */}
+          <g fill="#F0B90B">
+            {/* Top and Bottom diamonds */}
+            <polygon points="50,14 62,26 50,38 38,26" />
+            <polygon points="50,62 62,74 50,86 38,74" />
+            
+            {/* Side diamonds / arrows */}
+            <polygon points="26,50 38,38 32,32 20,44" />
+            <polygon points="26,50 38,62 32,68 20,56" />
+
+            <polygon points="74,50 62,38 68,32 80,44" />
+            <polygon points="74,50 62,62 68,68 80,56" />
+            
+            {/* Center diamond */}
+            <polygon points="50,42 58,50 50,58 42,50" />
+          </g>
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
 function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recordHistory }: { onBack: () => void, profile: any, onRefreshProfile: () => Promise<void>, isDevEnv: boolean, recordHistory: (q: string, t?: string, m?: any) => Promise<void> }) {
-  const isDev = isDevEnv || profile?.email === 'hermanosaia01@gmail.com';
-  const [loading, setLoading] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<'mpesa' | 'mkesh' | 'emola' | 'card'>('mpesa');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<any>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [paymentMessage, setPaymentMessage] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    if (paymentStatus === 'processing' && profile?.id) {
-      pollInterval = setInterval(async () => {
-        console.log('Polling for subscription status...');
-        try {
-          await onRefreshProfile();
-        } catch (err) {
-          console.error('Error refreshing profile during polling:', err);
-        }
-      }, 5000);
-    }
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [paymentStatus, profile?.id, onRefreshProfile]);
-
-  useEffect(() => {
-    if (paymentStatus === 'processing' && profile?.subscription_status === 'active') {
-      setPaymentStatus('success');
-      recordHistory('Subscription successful', 'subscription_success', { 
-        planId: selectedPlan?.id,
-        method: selectedMethod
-      }).catch(err => console.error('Error recording history:', err));
-    }
-  }, [profile?.subscription_status, paymentStatus, selectedPlan, selectedMethod, recordHistory]);
-
-  useEffect(() => {
-    console.log('SubscriptionScreen mounted/updated', { 
-      hasProfile: !!profile, 
-      profileId: profile?.id,
-      currentScreen: 'subscription'
-    });
-  }, [profile]);
-
-  const plans = [
-    { 
-      id: 'biweekly', 
-      name: 'Apoiador Bronze', 
-      price: '30 MZN', 
-      amount: 30,
-      duration: 'Apoio de 15 dias',
-      description: 'Ajuda a manter a infraestrutura de servidores e o Doutor IA online para todos. Desbloqueia Insígnia Bronze.',
-      icon: <Clock className="w-6 h-6" />,
-      days: 15
+  const localMethods = [
+    {
+      id: 'mpesa',
+      name: 'M-Pesa',
+      account: '852425930',
+      owner: 'Hermano Xadreque Abel Saia',
+      color: '#E61C25',
+      bgColor: 'bg-[#E61C25]/10',
+      borderColor: 'border-[#E61C25]/30',
+      textColor: 'text-[#E61C25]'
     },
-    { 
-      id: 'monthly', 
-      name: 'Apoiador Prata', 
-      price: '50 MZN', 
-      amount: 50,
-      duration: 'Apoio de 30 dias',
-      description: 'Contribuição essencial para garantir recursos rápidos e precisos do Doutor IA. Desbloqueia Insígnia Prata.',
-      icon: <Calendar className="w-6 h-6" />,
-      days: 30,
-      popular: true
+    {
+      id: 'emola',
+      name: 'E-Mola',
+      account: '867117831',
+      owner: 'Hermano Xadreque Abel Saia',
+      color: '#F7941D',
+      bgColor: 'bg-[#F7941D]/10',
+      borderColor: 'border-[#F7941D]/30',
+      textColor: 'text-[#F7941D]'
     },
-    { 
-      id: 'quarterly', 
-      name: 'Apoiador Ouro', 
-      price: '127.5 MZN', 
-      amount: 127.5,
-      duration: 'Apoio de 90 dias',
-      description: 'Apoio fundamental de longo prazo para novas pesquisas e melhorias na plataforma. Desbloqueia Insígnia Ouro.',
-      icon: <ShieldCheck className="w-6 h-6" />,
-      days: 90,
-      discount: '15% OFF'
+    {
+      id: 'mkesh',
+      name: 'M-Kesh',
+      account: '835069346',
+      owner: 'Hermano Xadreque Abel Saia',
+      color: '#00A859',
+      bgColor: 'bg-[#00A859]/10',
+      borderColor: 'border-[#00A859]/30',
+      textColor: 'text-[#00A859]'
     }
   ];
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      // Validate origin is from AI Studio preview or localhost
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-        return;
-      }
-      if (event.data?.type === 'PAYMENT_SUCCESS') {
-        setStatus('success');
-        onRefreshProfile().catch(err => console.error('Error refreshing profile after payment success:', err));
-        recordHistory('Subscription successful', 'subscription_success', { 
-          planId: selectedPlan?.id,
-          method: selectedMethod
-        }).catch(err => console.error('Error recording history:', err));
-        setTimeout(() => {
-          onBack();
-        }, 2000);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onRefreshProfile, onBack, selectedPlan, selectedMethod, recordHistory]);
-
-  const validatePhone = (number: string, method: string) => {
-    const clean = number.replace(/\D/g, '');
-    if (clean.length !== 9) return 'O número deve ter exatamente 9 dígitos';
-    
-    if (method === 'mpesa') {
-      if (!clean.startsWith('84') && !clean.startsWith('85')) return 'M-Pesa deve iniciar com 84 ou 85';
-    } else if (method === 'mkesh') {
-      if (!clean.startsWith('82') && !clean.startsWith('83')) return 'M-Kesh deve iniciar com 82 ou 83';
-    } else if (method === 'emola') {
-      if (!clean.startsWith('86') && !clean.startsWith('87')) return 'E-Mola deve iniciar com 86 ou 87';
+  const internationalMethods = [
+    {
+      id: 'paypal',
+      name: 'PayPal',
+      account: 'xadrequeabel3@gmail.com',
+      owner: 'xadrequeabel3@gmail.com',
+      color: '#003087',
+      bgColor: 'bg-[#003087]/10',
+      borderColor: 'border-[#003087]/30',
+      textColor: 'text-[#003087]'
+    },
+    {
+      id: 'airtm',
+      name: 'Airtm',
+      account: 'xadrequeabel3@gmail.com',
+      owner: 'xadrequeabel3@gmail.com',
+      color: '#2173FF',
+      bgColor: 'bg-[#2173FF]/10',
+      borderColor: 'border-[#2173FF]/30',
+      textColor: 'text-[#2173FF]'
+    },
+    {
+      id: 'binance',
+      name: 'Binance ID',
+      account: '932524666',
+      owner: 'Pay ID / Binance Pay',
+      color: '#F0B90B',
+      bgColor: 'bg-[#F0B90B]/10',
+      borderColor: 'border-[#F0B90B]/20',
+      textColor: 'text-[#F0B90B]'
     }
-    return null;
-  };
+  ];
 
-  const handleSubscribe = async () => {
-    console.log('handleSubscribe called', { 
-      planId: selectedPlan?.id, 
-      selectedMethod, 
-      phoneNumber: phoneNumber ? `${phoneNumber.slice(0, 3)}***${phoneNumber.slice(-2)}` : 'none', 
-      hasProfile: !!profile?.id 
-    });
-    if (!selectedPlan) {
-      console.warn('No plan selected');
-      return;
-    }
-    
-    const error = selectedMethod !== 'card' ? validatePhone(phoneNumber, selectedMethod) : null;
-    if (error) {
-      setPhoneError(error);
-      return;
-    }
-    setPhoneError(null);
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => {
+      setCopiedId(null);
+    }, 2000);
 
-    console.log('Subscribing to plan:', selectedPlan.id, 'with method:', selectedMethod);
-    if (!profile?.id && !isDev) {
-      console.error('No profile ID found');
-      setErrorMessage('Erro ao identificar o utilizador. Por favor, tente recarregar a página.');
-      setStatus('error');
-      return;
-    }
-    
-    setLoading(selectedPlan.id);
-    setPaymentStatus('processing');
-    setPaymentMessage('Iniciando o processo de pagamento...');
-
-    try {
-      setErrorMessage(null);
-      console.log('Initiating payment request to:', `/api/v1/payments/process`);
-      
-      const response = await fetch(`/api/v1/payments/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: selectedPlan.amount,
-          method: selectedMethod,
-          userId: profile?.id || '00000000-0000-0000-0000-000000000000',
-          planId: selectedPlan.id,
-          durationDays: selectedPlan.days,
-          phone: phoneNumber
-        })
-      });
-
-      console.log('Payment response status:', response.status, response.statusText);
-      const responseText = await response.text();
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Non-JSON response from payment API:", responseText);
-        // If it's an HTML response, extract the title or a snippet
-        const htmlMatch = responseText.match(/<title>(.*?)<\/title>/i);
-        const errorSnippet = htmlMatch ? htmlMatch[1] : responseText.slice(0, 100);
-        throw new Error(`Erro na resposta do servidor (não-JSON): ${errorSnippet}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(result.message || result.error || `Falha ao processar pagamento (Status: ${response.status})`);
-      }
-
-      console.log('Payment initiated successfully:', result);
-      
-      setPaymentReference(result.reference);
-      setPaymentStatus('processing');
-      setPaymentMessage('Por favor, verifique o seu telemóvel para confirmar o pagamento. Receberá um pedido de STK Push.');
-      
-      if (recordHistory) {
-        await recordHistory('Payment initiated', 'payment_initiated', { 
-          method: selectedMethod, 
-          amount: selectedPlan.amount,
-          planId: selectedPlan.id
-        }).catch(err => console.error('Error recording history:', err));
-      }
-      
-    } catch (error: any) {
-      console.error('Subscription error:', error.message || error);
-      setErrorMessage(error.message || 'Ocorreu um erro ao processar a sua subscrição. Por favor, tente novamente.');
-      setStatus('error');
-      setPaymentStatus('error');
-      setPaymentMessage(error.message || 'Erro ao processar pagamento');
-    } finally {
-      setLoading(null);
+    if (recordHistory) {
+      recordHistory(`Copied donation account: ${id}`, 'donation_copy', { method: id }).catch(err => console.error('Error recording history:', err));
     }
   };
 
   return (
     <div className="flex-1 bg-surface flex flex-col">
-      <header className="p-6 flex items-center gap-4">
+      <header className="p-6 flex items-center gap-4 border-b border-outline-variant/15">
         <button onClick={onBack} className="p-2 rounded-full hover:bg-surface-container-low transition-all">
           <ArrowLeft className="w-6 h-6 text-on-surface" />
         </button>
-        <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">Apoiar o Projecto</h1>
+        <div>
+          <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">Apoiar o Projecto</h1>
+          <p className="text-xs text-on-surface-variant">Escolha como fazer a sua contribuição voluntária</p>
+        </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-6 overflow-y-auto pb-12">
-        <div className="bg-primary/5 border border-primary/10 rounded-3xl p-6 space-y-2">
+      <main className="flex-1 p-6 space-y-8 overflow-y-auto pb-12 max-w-2xl mx-auto w-full">
+        <div className="bg-primary/5 border border-primary/10 rounded-3xl p-6 space-y-3">
           <div className="flex items-center gap-3 text-primary">
-            <Sparkles className="w-5 h-5" />
-            <span className="font-bold uppercase tracking-wider text-xs">Uso 100% Gratuito</span>
+            <Sparkles className="w-5 h-5 animate-pulse" />
+            <span className="font-bold uppercase tracking-wider text-xs font-sans">Uso 100% Gratuito</span>
           </div>
           <p className="text-on-surface-variant text-sm leading-relaxed">
-            O aplicativo agora é totalmente **gratuito e livre de bloqueios**! No entanto, manter os servidores do Doutor IA activos gera custos. Se puder, faça uma doação ou apoio voluntário para garantir a velocidade e continuidade deste projecto em Moçambique.
+            O aplicativo do <strong>Doutor IA</strong> agora é totalmente gratuito e livre para todos em Moçambique! No entanto, manter os servidores activos e processando respostas de IA em tempo real gera custos diários. 
+          </p>
+          <p className="text-on-surface-variant text-sm leading-relaxed">
+            Se este projecto tem sido útil para as suas consultas ou estudos de enfermagem/medicina, considere fazer um **apoio voluntário de qualquer valor**. Muito obrigado pelo carinho e suporte! ❤️
           </p>
         </div>
 
-        <div className="grid gap-4">
-          {plans.map((plan) => (
-            <motion.div
-              key={plan.id}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              className={cn(
-                "relative p-6 rounded-[2rem] border-2 transition-all cursor-pointer overflow-hidden",
-                selectedPlan?.id === plan.id ? "border-primary bg-primary/5" : "border-outline-variant/10 bg-surface-container-lowest",
-                loading === plan.id && "opacity-50 pointer-events-none"
-              )}
-              onClick={() => setSelectedPlan(plan)}
-            >
-              {plan.popular && (
-                <div className="absolute top-0 right-0 bg-primary text-white px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
-                  Popular
-                </div>
-              )}
-              {plan.discount && (
-                <div className="absolute top-0 right-0 bg-green-500 text-white px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
-                  {plan.discount}
-                </div>
-              )}
-
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center",
-                    selectedPlan?.id === plan.id ? "bg-primary text-white" : "bg-surface-container-high text-primary"
-                  )}>
-                    {plan.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-headline text-lg font-bold text-on-surface">{plan.name}</h3>
-                    <p className="text-xs text-on-surface-variant font-medium">{plan.duration}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-headline text-xl font-black text-primary">{plan.price}</p>
-                </div>
-              </div>
-
-              <p className="mt-4 text-sm text-on-surface-variant leading-relaxed">
-                {plan.description}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-
-        {selectedPlan && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-surface-container-low rounded-[2rem] p-6 border border-outline-variant/10 space-y-6"
-          >
-            {/* Payment Status Overlay */}
-            {paymentStatus !== 'idle' && (
-              <div className="p-6 rounded-2xl bg-surface-variant/30 border border-outline-variant animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col items-center text-center">
-                  {paymentStatus === 'processing' && (
-                    <>
-                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                      </div>
-                      <h3 className="text-xl font-bold text-on-surface mb-2">Aguardando Confirmação</h3>
-                      <p className="text-on-surface-variant max-w-md text-sm">
-                        {paymentMessage}
-                      </p>
-                      <div className="mt-4 p-3 bg-surface rounded-xl border border-outline-variant w-full max-w-xs">
-                        <p className="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-1">Referência</p>
-                        <p className="text-lg font-mono font-bold text-primary">{paymentReference}</p>
-                      </div>
-                      <p className="mt-6 text-[10px] text-on-surface-variant italic leading-relaxed">
-                        Não feche esta página. O seu apoio será consolidado automaticamente assim que confirmar no telemóvel e receberá a sua insígnia.
-                      </p>
-                    </>
-                  )}
-
-                  {paymentStatus === 'error' && (
-                    <>
-                      <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mb-4">
-                        <AlertCircle className="w-8 h-8 text-error" />
-                      </div>
-                      <h3 className="text-xl font-bold text-on-surface mb-2">Erro no Pagamento</h3>
-                      <p className="text-on-surface-variant mb-6 text-sm">
-                        {paymentMessage}
-                      </p>
-                      <button
-                        onClick={() => setPaymentStatus('idle')}
-                        className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-opacity text-sm"
-                      >
-                        Tentar Novamente
-                      </button>
-                    </>
-                  )}
-
-                  {paymentStatus === 'success' && (
-                    <>
-                      <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
-                        <CheckCircle2 className="w-8 h-8 text-success" />
-                      </div>
-                      <h3 className="text-xl font-bold text-on-surface mb-2">Pagamento Confirmado!</h3>
-                      <p className="text-on-surface-variant mb-6 text-sm">
-                        A sua subscrição foi activada com sucesso. Agora tem acesso total a todas as funcionalidades.
-                      </p>
-                      <button
-                        onClick={onBack}
-                        className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-opacity text-sm"
-                      >
-                        Começar a Usar
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {paymentStatus === 'idle' && (
-              <>
-                <div className="space-y-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Método de Pagamento</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'mpesa', name: 'M-Pesa', color: 'bg-[#E61C25]', available: true },
-                  { id: 'mkesh', name: 'M-Kesh', color: 'bg-[#FFCC00]', available: false },
-                  { id: 'emola', name: 'E-Mola', color: 'bg-[#F7941D]', available: false },
-                  { id: 'card', name: 'Cartão', color: 'bg-primary', available: false }
-                ].map((method) => (
-                  <button
-                    key={method.id}
-                    onClick={() => method.available && setSelectedMethod(method.id as any)}
-                    disabled={!method.available}
-                    className={cn(
-                      "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
-                      !method.available && "opacity-50 cursor-not-allowed",
-                      selectedMethod === method.id 
-                        ? "border-primary bg-primary/5" 
-                        : "border-outline-variant/10 bg-surface-container-lowest"
-                    )}
-                  >
-                    <div className={cn("w-8 h-8 rounded-full", method.color)} />
-                    <span className="text-xs font-bold text-on-surface">{method.name}</span>
-                    {!method.available && <span className="text-[9px] font-black uppercase text-on-surface-variant">Brevemente</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {selectedMethod !== 'card' && (
-              <div className="space-y-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Número de Celular</p>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 9);
-                      setPhoneNumber(val);
-                      setPhoneError(null);
-                    }}
-                    placeholder="Ex: 841234567"
-                    className={cn(
-                      "w-full bg-surface-container-highest border-2 rounded-2xl px-6 py-4 text-on-surface font-medium focus:outline-none focus:border-primary transition-all",
-                      phoneError ? "border-error" : "border-transparent"
-                    )}
-                  />
-                  {phoneError && (
-                    <p className="text-[10px] text-error font-bold mt-2 ml-2 uppercase tracking-wider">{phoneError}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <button
-              disabled={!!loading || (!profile?.id && !isDev) || (selectedMethod !== 'card' && phoneNumber.length < 9)}
-              onClick={handleSubscribe}
-              className={cn(
-                "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
-                "bg-primary text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
-              )}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (!profile?.id && !isDev) ? (
-                <span>A carregar perfil...</span>
-              ) : (
-                <>
-                  <span>Pagar {selectedPlan.price}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </>
-        )}
-
-        {status === 'error' && errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 rounded-2xl bg-error/10 border border-error/20 space-y-3"
-              >
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-error shrink-0" />
-                  <p className="text-xs text-error font-bold leading-relaxed">{errorMessage}</p>
-                </div>
-                
-                {(errorMessage.includes('PAYSUITE_API_KEY') || isDevEnv) && (
-                  <button
-                    onClick={async () => {
-                      setStatus('processing');
-                      setErrorMessage(null);
-                      try {
-                        const userId = profile?.id || '00000000-0000-0000-0000-000000000000';
-                        const isDevUser = userId === '00000000-0000-0000-0000-000000000000';
-                        
-                        // Match the server's new 15-character reference format
-                        // For dev users, use the 'AAAAAAAAAAAAAAAAAAAAAA' prefix
-                        const reference = isDevUser 
-                          ? `AAAAAAAAAAAAAAAAAAAAAA${Math.random().toString(16).slice(2, 6)}`
-                          : Math.random().toString(16).slice(2, 17);
-                        
-                        console.log('Mock mode: Simulating webhook success for reference:', reference);
-                        
-                        await fetch(`/webhook`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'x-webhook-signature': 'simulated_signature'
-                          },
-                          body: JSON.stringify({
-                            event: 'payment.success',
-                            data: {
-                              reference,
-                              amount: selectedPlan.amount
-                            }
-                          })
-                        });
-                        
-                        setStatus('success');
-                        await onRefreshProfile();
-                        setTimeout(() => onBack(), 2000);
-                      } catch (err) {
-                        setStatus('error');
-                        setErrorMessage('Falha ao simular pagamento.');
-                      }
-                    }}
-                    className="w-full py-2 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
-                  >
-                    Simular Pagamento (Modo de Teste)
-                  </button>
+        {/* Canais Nacionais */}
+        <div className="space-y-4">
+          <h2 className="text-xs font-black uppercase tracking-widest text-[#E61C25] px-2 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#E61C25]" />
+            Canais Nacionais (Moçambique)
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-1">
+            {localMethods.map((method) => (
+              <div 
+                key={method.id}
+                className={cn(
+                  "p-5 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all bg-surface-container-lowest",
+                  method.borderColor
                 )}
-              </motion.div>
-            )}
-
-            {status === 'success' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center gap-3"
               >
-                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-                <p className="text-xs text-green-500 font-bold leading-relaxed">
-                  Pedido enviado! Verifique o seu celular para confirmar o pagamento.
-                </p>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
+                <div className="flex items-center gap-4">
+                  {getPaymentLogo(method.id)}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-headline font-bold text-on-surface leading-none">{method.name}</h4>
+                      <span className="text-[10px] font-medium text-on-surface-variant/70">({method.owner})</span>
+                    </div>
+                    <p className="text-lg font-mono font-bold text-primary mt-1 tracking-wider">{method.account}</p>
+                  </div>
+                </div>
 
-        <div className="text-center space-y-2 pt-4">
-          <p className="text-[10px] text-on-surface-variant font-medium">
-            Pagamentos seguros processados via Paysuite.
+                <button
+                  onClick={() => handleCopy(method.id, method.account)}
+                  className={cn(
+                    "px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border self-start sm:self-center",
+                    copiedId === method.id 
+                      ? "bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400" 
+                      : "bg-surface hover:bg-surface-container-low border-outline-variant/15 text-on-surface"
+                  )}
+                >
+                  {copiedId === method.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Número</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Internacional & Cripto */}
+        <div className="space-y-4">
+          <h2 className="text-xs font-black uppercase tracking-widest text-primary px-2 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            Internacional & Cripto
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-1">
+            {internationalMethods.map((method) => (
+              <div 
+                key={method.id}
+                className={cn(
+                  "p-5 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all bg-surface-container-lowest",
+                  method.borderColor
+                )}
+              >
+                <div className="flex items-center gap-4">
+                  {getPaymentLogo(method.id)}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-headline font-bold text-on-surface leading-none">{method.name}</h4>
+                      {method.id === 'binance' && (
+                        <span className="text-[10px] font-medium text-on-surface-variant/70">({method.owner})</span>
+                      )}
+                    </div>
+                    <p className="text-sm font-mono font-bold text-on-surface-variant mt-1.5 break-all select-all">{method.account}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleCopy(method.id, method.account)}
+                  className={cn(
+                    "px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border self-start sm:self-center",
+                    copiedId === method.id 
+                      ? "bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400" 
+                      : "bg-surface hover:bg-surface-container-low border-outline-variant/15 text-on-surface"
+                  )}
+                >
+                  {copiedId === method.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Endereço</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-outline-variant/10 text-center space-y-2">
+          <p className="text-xs text-on-surface-variant font-medium">
+            Desenvolvido localmente por <strong>Hermano Saia</strong> com ❤️ em Moçambique.
           </p>
-          <p className="text-[10px] text-on-surface-variant/60">
-            Ao subscrever, você concorda com os nossos Termos de Serviço e Política de Privacidade.
+          <p className="text-[10px] text-on-surface-variant/60 leading-relaxed">
+            As doações são estritamente voluntárias e destinam-se exclusivamente ao pagamento de servidores de hospedagem e cotas de requisição da API Gemini.
           </p>
         </div>
       </main>
-
-      <AnimatePresence>
-        {status !== 'idle' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-surface rounded-[2.5rem] p-8 max-w-sm w-full text-center space-y-6 shadow-2xl"
-            >
-              {status === 'processing' && (
-                <>
-                  <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-                    <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-headline text-xl font-bold text-on-surface">Processando Pagamento</h3>
-                    <p className="text-sm text-on-surface-variant">Aguarde um momento enquanto confirmamos a sua transação...</p>
-                  </div>
-                </>
-              )}
-
-              {status === 'success' && (
-                <>
-                  <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-12 h-12 text-green-500" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-headline text-xl font-bold text-on-surface">Obrigado pelo seu Apoio!</h3>
-                    <p className="text-sm text-on-surface-variant">Seu apoio foi confirmado com sucesso. Você recebeu a sua Insígnia de Apoiador oficial! Muito obrigado por apoiar o desenvolvimento local em Moçambique.</p>
-                  </div>
-                </>
-              )}
-
-              {status === 'error' && (
-                <>
-                  <div className="w-20 h-20 bg-error/10 rounded-full flex items-center justify-center mx-auto">
-                    <AlertTriangle className="w-12 h-12 text-error" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-headline text-xl font-bold text-on-surface">Erro no Pagamento</h3>
-                    <p className="text-sm text-on-surface-variant">Não foi possível processar o seu pagamento. Por favor, tente novamente.</p>
-                  </div>
-                  <button
-                    onClick={() => setStatus('idle')}
-                    className="w-full py-3 bg-surface-container-high text-on-surface rounded-2xl font-bold"
-                  >
-                    Tentar Novamente
-                  </button>
-                </>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
