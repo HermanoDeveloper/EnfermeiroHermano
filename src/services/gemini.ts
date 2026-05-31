@@ -154,7 +154,6 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
   const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
 
   // Optimize response speed: simple greetings and navigation commands do not need Google Search.
-  // Disabling the search tool when unnecessary drastically reduces response latency from ~6s to ~1s.
   const uppercaseQuestion = question.trim().toUpperCase();
   const isGreetingOrSimple = uppercaseQuestion.match(/^(OLA|OLÁ|BOM DIAS|BOM DIA|BOA TARDE|BOA NOITE|TUDO BEM|TUDO BOM|COMO ESTAS|COMO ESTÁS|HELO|HELLO|HI|OI|QUEM E VOCE|QUEM ÉS|OBRIGADO|OBRIGADA|VALEU)/) ||
     uppercaseQuestion.includes("TELA") || 
@@ -162,12 +161,63 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
     uppercaseQuestion.includes("PERFIL") || 
     uppercaseQuestion.includes("HISTORICO");
 
-  const tools = isGreetingOrSimple ? undefined : [{ googleSearch: {} }];
+  // Determine if this is a general/universal concept query (e.g., definitions, basic anatomy, universal medical conditions where treatment is consistent globally)
+  // These are handled perfectly by the model's pre-trained weights, avoiding heavy web search latency and quota usage.
+  const isPlainUniversalConcept = uppercaseQuestion.startsWith("O QUE É") ||
+    uppercaseQuestion.startsWith("O QUE E") ||
+    uppercaseQuestion.startsWith("OQUE É") ||
+    uppercaseQuestion.startsWith("OQUE E") ||
+    uppercaseQuestion.startsWith("O QUE SIGNIFICA") ||
+    uppercaseQuestion.startsWith("EXPLIQUE O QUE") ||
+    uppercaseQuestion.startsWith("CONCEITO DE") ||
+    uppercaseQuestion.startsWith("DEFINIÇÃO DE") ||
+    uppercaseQuestion.startsWith("DEFINICAO DE") ||
+    uppercaseQuestion.includes("AFASIA") ||
+    uppercaseQuestion.includes("ASFIXIA") ||
+    uppercaseQuestion.includes("ANATOMIA") ||
+    uppercaseQuestion.includes("FISIOLOGIA");
+
+  // Identify localized topics that exhibit regional variations (epidemiology, public health guidelines, specific Mozambican treatment lines, national programs)
+  // For these, we explicitly prioritize MISAU (Moçambique) and OMS/WHO to bring the exact localized standards.
+  const isLocalOrRegionalClinical = uppercaseQuestion.includes("TRATAMENTO") || 
+    uppercaseQuestion.includes("PROTOCOLO") || 
+    uppercaseQuestion.includes("ESQUEMA") || 
+    uppercaseQuestion.includes("MALARIA") || 
+    uppercaseQuestion.includes("PALUDISMO") || 
+    uppercaseQuestion.includes("COLERA") || 
+    uppercaseQuestion.includes("CÓLERA") || 
+    uppercaseQuestion.includes("HIV") || 
+    uppercaseQuestion.includes("SIDA") || 
+    uppercaseQuestion.includes("TUBERCULOSE") || 
+    uppercaseQuestion.includes("VACINA") || 
+    uppercaseQuestion.includes("SURTO") || 
+    uppercaseQuestion.includes("EPIDEMIA") || 
+    uppercaseQuestion.includes("MISAU") || 
+    uppercaseQuestion.includes("MOÇAMBIQUE") || 
+    uppercaseQuestion.includes("MOCAMBIQUE") || 
+    uppercaseQuestion.includes("MAPUTO") ||
+    uppercaseQuestion.includes("FNM");
+
+  let tools: any = undefined;
+  let searchGroundingPrompt = question;
+
+  if (isGreetingOrSimple) {
+    tools = undefined; // No search logic
+  } else if (isPlainUniversalConcept) {
+    tools = undefined; // Serve from LLM knowledge (instantaneous & saves quota)
+  } else if (isLocalOrRegionalClinical) {
+    tools = [{ googleSearch: {} }];
+    // Instructing search-grounding to fetch specialized documents from primary trusted portals
+    searchGroundingPrompt = `${question} (De preferência, pesquise apenas em site:misau.gov.mz ou site:who.int ou site:oms.int por diretrizes específicas moçambicanas de saúde)`;
+  } else {
+    // Normal medical questions use search normally
+    tools = [{ googleSearch: {} }];
+  }
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: question,
+      contents: searchGroundingPrompt,
       config: {
         systemInstruction,
         tools,
@@ -245,10 +295,10 @@ export async function searchDiseaseAI(diseaseName: string): Promise<Disease | nu
 Você é um especialista médico moçambicano encarregado de fornecer informações precisas e estruturadas sobre a doença "${diseaseName}".
 
 DIRETRIZES DE PESQUISA:
-1. INFORMAÇÕES GERAIS: Use a busca do Google para consultar fontes oficiais (OMS, MISAU).
+1. INFORMAÇÕES GERAIS: Use a busca do Google para consultar fontes oficiais de extrema relevância regional (priorize site:misau.gov.mz e site:who.int / site:oms.int).
 2. MEDICAMENTOS E TRATAMENTOS:
    - FONTE PRIMÁRIA: Use o Formulário Nacional de Medicamentos (FNM) abaixo.
-   - FONTE SECUNDÁRIA: Use a busca do Google para diretrizes MISAU/OMS se não encontrar no FNM.
+   - FONTE SECUNDÁRIA: Use a busca do Google orientada a diretrizes MISAU/OMS para obter o protocolo local moçambicano válido se não encontrar no FNM.
    - OBRIGATÓRIO: Incluir dose, intervalo e duração.
    - IDENTIFICAÇÃO: Indique se a fonte é "FNM Moçambique" ou "Diretrizes MISAU/OMS".
 
@@ -259,7 +309,7 @@ ${MEDICATION_FORM_TEXT}
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
+      contents: `Pesquise e estruture os dados da doença: ${diseaseName}. OBS: Por favor, dê prioridade absoluta nas pesquisas ao Ministério da Saúde de Moçambique (misau.gov.mz) e à OMS (who.int / oms.int).`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
@@ -310,7 +360,7 @@ Você é um instrutor de enfermagem moçambicano encarregado de fornecer guias p
 
 DIRETRIZES DE PESQUISA:
 1. FONTE PRIMÁRIA: Use o Manual de Procedimentos Básicos de Enfermagem abaixo.
-2. FONTE SECUNDÁRIA: Use a busca do Google para informações adicionais e evidências recentes.
+2. FONTE SECUNDÁRIA: Use a busca do Google para obter regulamentos e orientações adicionais de ensino moçambicanos ou da OMS.
 
 MANUAL DE PROCEDIMENTOS BÁSICOS DE ENFERMAGEM:
 ${NURSING_MANUAL_TEXT}
@@ -319,7 +369,7 @@ ${NURSING_MANUAL_TEXT}
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
+      contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}. Dê prioridade a fontes conceituadas de enfermagem em Moçambique ou OMS.`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
