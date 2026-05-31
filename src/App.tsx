@@ -620,6 +620,8 @@ export default function App() {
       );
     }
 
+    // The application is now free, support is voluntary. Commented out direct block.
+    /*
     if (isLoggedIn && !isDevEnv && currentScreen !== 'subscription' && currentScreen !== 'profile') {
       const isTrial = profile?.subscription_status === 'trialing';
       const isActive = profile?.subscription_status === 'active';
@@ -630,6 +632,7 @@ export default function App() {
         return <SubscriptionScreen onBack={() => setCurrentScreen('profile')} profile={profile} onRefreshProfile={fetchProfile} isDevEnv={isDevEnv} recordHistory={recordHistory} />;
       }
     }
+    */
 
     switch (currentScreen) {
       case 'home':
@@ -798,7 +801,7 @@ export default function App() {
                 <SidebarItem icon={<Sparkles className="w-5 h-5" />} label="Doutor IA" onClick={() => { setCurrentScreen('ai-assistant'); setIsSidebarOpen(false); }} active={currentScreen === 'ai-assistant'} />
                 <SidebarItem icon={<Activity className="w-5 h-5" />} label="Protocolos Clínicos" onClick={() => { setCurrentScreen('diseases'); setIsSidebarOpen(false); }} active={currentScreen === 'diseases'} />
                 <SidebarItem icon={<Stethoscope className="w-5 h-5" />} label="Procedimentos" onClick={() => { setCurrentScreen('procedures'); setIsSidebarOpen(false); }} active={currentScreen === 'procedures'} />
-                <SidebarItem icon={<CreditCard className="w-5 h-5" />} label="Subscrição" onClick={() => { setCurrentScreen('subscription'); setIsSidebarOpen(false); }} active={currentScreen === 'subscription'} />
+                <SidebarItem icon={<CreditCard className="w-5 h-5" />} label="Apoiar Projecto" onClick={() => { setCurrentScreen('subscription'); setIsSidebarOpen(false); }} active={currentScreen === 'subscription'} />
                 
                 <div className="pt-4 pb-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-outline px-4 mb-4">Personalização</p>
@@ -3338,9 +3341,9 @@ function ProfileScreen({ profile, onLogout, onRefreshProfile, onNavigate, paymen
             <CreditCard className="w-6 h-6 text-tertiary" />
           </div>
           <div className="flex-1">
-            <h4 className="font-bold text-on-surface">Subscrição</h4>
+            <h4 className="font-bold text-on-surface">Apoiar Projeto</h4>
             <p className="text-xs text-on-surface-variant">
-              {profile?.subscription_status === 'trialing' ? 'Período de Teste' : (profile?.subscription_status === 'active' ? 'Plano Ativo' : 'Gerenciar Plano')}
+              {profile?.subscription_status === 'active' ? 'Apoiador Oficial ❤️' : 'Fazer uma contribuição'}
             </p>
           </div>
           <ChevronRight className="w-5 h-5 text-on-surface-variant" />
@@ -3525,32 +3528,32 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
   const plans = [
     { 
       id: 'biweekly', 
-      name: 'Quinzenal', 
+      name: 'Apoiador Bronze', 
       price: '30 MZN', 
       amount: 30,
-      duration: '15 dias',
-      description: 'Ideal para consultas rápidas e pontuais.',
+      duration: 'Apoio de 15 dias',
+      description: 'Ajuda a manter a infraestrutura de servidores e o Doutor IA online para todos. Desbloqueia Insígnia Bronze.',
       icon: <Clock className="w-6 h-6" />,
       days: 15
     },
     { 
       id: 'monthly', 
-      name: 'Mensal', 
+      name: 'Apoiador Prata', 
       price: '50 MZN', 
       amount: 50,
-      duration: '30 dias',
-      description: 'O plano mais popular para acompanhamento contínuo.',
+      duration: 'Apoio de 30 dias',
+      description: 'Contribuição essencial para garantir recursos rápidos e precisos do Doutor IA. Desbloqueia Insígnia Prata.',
       icon: <Calendar className="w-6 h-6" />,
       days: 30,
       popular: true
     },
     { 
       id: 'quarterly', 
-      name: 'Trimestral', 
+      name: 'Apoiador Ouro', 
       price: '127.5 MZN', 
       amount: 127.5,
-      duration: '90 dias',
-      description: 'Economize 15% com o plano de longa duração.',
+      duration: 'Apoio de 90 dias',
+      description: 'Apoio fundamental de longo prazo para novas pesquisas e melhorias na plataforma. Desbloqueia Insígnia Ouro.',
       icon: <ShieldCheck className="w-6 h-6" />,
       days: 90,
       discount: '15% OFF'
@@ -3693,17 +3696,17 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
         <button onClick={onBack} className="p-2 rounded-full hover:bg-surface-container-low transition-all">
           <ArrowLeft className="w-6 h-6 text-on-surface" />
         </button>
-        <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">Planos de Subscrição</h1>
+        <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">Apoiar o Projecto</h1>
       </header>
 
       <main className="flex-1 p-6 space-y-6 overflow-y-auto pb-12">
         <div className="bg-primary/5 border border-primary/10 rounded-3xl p-6 space-y-2">
           <div className="flex items-center gap-3 text-primary">
             <Sparkles className="w-5 h-5" />
-            <span className="font-bold uppercase tracking-wider text-xs">Acesso Ilimitado</span>
+            <span className="font-bold uppercase tracking-wider text-xs">Uso 100% Gratuito</span>
           </div>
           <p className="text-on-surface-variant text-sm leading-relaxed">
-            Subscreva para ter acesso ilimitado a todas as funcionalidades, incluindo o Assistente de IA e informações detalhadas sobre doenças e procedimentos.
+            O aplicativo agora é totalmente **gratuito e livre de bloqueios**! No entanto, manter os servidores do Doutor IA activos gera custos. Se puder, faça uma doação ou apoio voluntário para garantir a velocidade e continuidade deste projecto em Moçambique.
           </p>
         </div>
 
@@ -3780,7 +3783,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
                         <p className="text-lg font-mono font-bold text-primary">{paymentReference}</p>
                       </div>
                       <p className="mt-6 text-[10px] text-on-surface-variant italic leading-relaxed">
-                        Não feche esta página. A sua subscrição será activada automaticamente assim que confirmar no telemóvel.
+                        Não feche esta página. O seu apoio será consolidado automaticamente assim que confirmar no telemóvel e receberá a sua insígnia.
                       </p>
                     </>
                   )}
@@ -4017,8 +4020,8 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
                     <CheckCircle2 className="w-12 h-12 text-green-500" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="font-headline text-xl font-bold text-on-surface">Subscrição Ativa!</h3>
-                    <p className="text-sm text-on-surface-variant">Obrigado! Agora você tem acesso ilimitado a todas as funcionalidades.</p>
+                    <h3 className="font-headline text-xl font-bold text-on-surface">Obrigado pelo seu Apoio!</h3>
+                    <p className="text-sm text-on-surface-variant">Seu apoio foi confirmado com sucesso. Você recebeu a sua Insígnia de Apoiador oficial! Muito obrigado por apoiar o desenvolvimento local em Moçambique.</p>
                   </div>
                 </>
               )}
