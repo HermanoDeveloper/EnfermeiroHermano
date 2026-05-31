@@ -155,13 +155,12 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
     const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
 
     const chat = ai.chats.create({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3.5-flash",
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: ASSISTANT_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: ASSISTANT_SCHEMA
       }
     });
 
@@ -224,14 +223,13 @@ ${MEDICATION_FORM_TEXT}
 `;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3.5-flash",
       contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: DISEASE_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: DISEASE_SCHEMA
       }
     });
 
@@ -263,14 +261,13 @@ ${NURSING_MANUAL_TEXT}
 `;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3.5-flash",
       contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: PROCEDURE_SCHEMA,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        responseSchema: PROCEDURE_SCHEMA
       }
     });
 

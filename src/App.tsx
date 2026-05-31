@@ -1552,13 +1552,55 @@ function DiseaseDetailScreen({ disease, onBack, onShowToast }: { disease: Diseas
         backgroundColor: '#ffffff',
         logging: false,
         onclone: (clonedDoc) => {
+          // Wrap getComputedStyle to override any oklch/oklab colors before html2canvas sees them
+          if (clonedDoc.defaultView) {
+            const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
+            clonedDoc.defaultView.getComputedStyle = function (el: Element, pseudo?: string) {
+              const style = originalGetComputedStyle.call(clonedDoc.defaultView, el, pseudo);
+              if (!style) return style;
+              return new Proxy(style, {
+                get(target, prop) {
+                  const val = (target as any)[prop];
+                  if (typeof val === 'function') {
+                    if (prop === 'getPropertyValue') {
+                      return function (propertyName: string) {
+                        try {
+                          const originalValue = target.getPropertyValue(propertyName);
+                          if (originalValue && (originalValue.includes('oklch') || originalValue.includes('oklab') || originalValue.includes('var('))) {
+                            if (propertyName.includes('background')) return '#ffffff';
+                            if (propertyName.includes('color')) return '#111827';
+                            if (propertyName.includes('border')) return '#e5e7eb';
+                            return '#01579b'; // safe primary color fallback
+                          }
+                          return originalValue;
+                        } catch (e) {
+                          return '';
+                        }
+                      };
+                    }
+                    return val.bind(target);
+                  }
+                  if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('var('))) {
+                    const propStr = String(prop);
+                    if (propStr.includes('background') || propStr.includes('Background')) return '#ffffff';
+                    if (propStr.includes('color') || propStr.includes('Color')) return '#111827';
+                    if (propStr.includes('border') || propStr.includes('Border')) return '#e5e7eb';
+                    return '#01579b';
+                  }
+                  return val;
+                }
+              });
+            };
+          }
+
           // Aggressively fix oklab/oklch unsupported in html2canvas by replacing them in all style tags
           const styleTags = clonedDoc.getElementsByTagName('style');
           for (let i = 0; i < styleTags.length; i++) {
             try {
               styleTags[i].innerHTML = styleTags[i].innerHTML
                 .replace(/oklch\([^)]+\)/g, '#00478d') // Fallback to primary color
-                .replace(/oklab\([^)]+\)/g, '#00478d');
+                .replace(/oklab\([^)]+\)/g, '#00478d')
+                .replace(/var\(--[^)]+\)/g, '#00478d'); // Replace CSS vars to prevent unresolved errors
             } catch (e) {
               console.warn('Failed to patch style tag', e);
             }
@@ -1577,15 +1619,18 @@ function DiseaseDetailScreen({ disease, onBack, onShowToast }: { disease: Diseas
               
               // Force standard colors for common properties if they use unsupported functions
               // We check the inline style and also try to override computed styles
-              const style = window.getComputedStyle(el);
+              const style = clonedDoc.defaultView ? clonedDoc.defaultView.getComputedStyle(el) : window.getComputedStyle(el);
+              const bg = style?.backgroundColor || '';
+              const col = style?.color || '';
+              const border = style?.borderColor || '';
               
-              if (style.backgroundColor.includes('oklab') || style.backgroundColor.includes('oklch')) {
+              if (bg && (bg.includes('oklab') || bg.includes('oklch') || bg.includes('var('))) {
                 el.style.setProperty('background-color', '#ffffff', 'important');
               }
-              if (style.color.includes('oklab') || style.color.includes('oklch')) {
+              if (col && (col.includes('oklab') || col.includes('oklch') || col.includes('var('))) {
                 el.style.setProperty('color', '#000000', 'important');
               }
-              if (style.borderColor.includes('oklab') || style.borderColor.includes('oklch')) {
+              if (border && (border.includes('oklab') || border.includes('oklch') || border.includes('var('))) {
                 el.style.setProperty('border-color', '#e5e7eb', 'important');
               }
 
@@ -1932,13 +1977,55 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing, on
         backgroundColor: '#ffffff',
         logging: false,
         onclone: (clonedDoc) => {
+          // Wrap getComputedStyle to override any oklch/oklab colors before html2canvas sees them
+          if (clonedDoc.defaultView) {
+            const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
+            clonedDoc.defaultView.getComputedStyle = function (el: Element, pseudo?: string) {
+              const style = originalGetComputedStyle.call(clonedDoc.defaultView, el, pseudo);
+              if (!style) return style;
+              return new Proxy(style, {
+                get(target, prop) {
+                  const val = (target as any)[prop];
+                  if (typeof val === 'function') {
+                    if (prop === 'getPropertyValue') {
+                      return function (propertyName: string) {
+                        try {
+                          const originalValue = target.getPropertyValue(propertyName);
+                          if (originalValue && (originalValue.includes('oklch') || originalValue.includes('oklab') || originalValue.includes('var('))) {
+                            if (propertyName.includes('background')) return '#ffffff';
+                            if (propertyName.includes('color')) return '#111827';
+                            if (propertyName.includes('border')) return '#e5e7eb';
+                            return '#01579b'; // safe primary color fallback
+                          }
+                          return originalValue;
+                        } catch (e) {
+                          return '';
+                        }
+                      };
+                    }
+                    return val.bind(target);
+                  }
+                  if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('var('))) {
+                    const propStr = String(prop);
+                    if (propStr.includes('background') || propStr.includes('Background')) return '#ffffff';
+                    if (propStr.includes('color') || propStr.includes('Color')) return '#111827';
+                    if (propStr.includes('border') || propStr.includes('Border')) return '#e5e7eb';
+                    return '#01579b';
+                  }
+                  return val;
+                }
+              });
+            };
+          }
+
           // Aggressively fix oklab/oklch unsupported in html2canvas by replacing them in all style tags
           const styleTags = clonedDoc.getElementsByTagName('style');
           for (let i = 0; i < styleTags.length; i++) {
             try {
               styleTags[i].innerHTML = styleTags[i].innerHTML
                 .replace(/oklch\([^)]+\)/g, '#00478d')
-                .replace(/oklab\([^)]+\)/g, '#00478d');
+                .replace(/oklab\([^)]+\)/g, '#00478d')
+                .replace(/var\(--[^)]+\)/g, '#00478d'); // Replace CSS vars to prevent unresolved errors
             } catch (e) {
               console.warn('Failed to patch style tag', e);
             }
@@ -1954,16 +2041,19 @@ function ProcedureDetailScreen({ procedure, onBack, onEnhanceAI, isEnhancing, on
             const allElements = clonedElement.getElementsByTagName('*');
             for (let i = 0; i < allElements.length; i++) {
               const el = allElements[i] as HTMLElement;
-              const style = window.getComputedStyle(el);
+              const style = clonedDoc.defaultView ? clonedDoc.defaultView.getComputedStyle(el) : window.getComputedStyle(el);
+              const bg = style?.backgroundColor || '';
+              const col = style?.color || '';
+              const border = style?.borderColor || '';
               
               // Replace oklab/oklch colors which html2canvas doesn't support
-              if (style.backgroundColor.includes('oklab') || style.backgroundColor.includes('oklch')) {
+              if (bg && (bg.includes('oklab') || bg.includes('oklch') || bg.includes('var('))) {
                 el.style.setProperty('background-color', '#ffffff', 'important');
               }
-              if (style.color.includes('oklab') || style.color.includes('oklch')) {
+              if (col && (col.includes('oklab') || col.includes('oklch') || col.includes('var('))) {
                 el.style.setProperty('color', '#000000', 'important');
               }
-              if (style.borderColor.includes('oklab') || style.borderColor.includes('oklch')) {
+              if (border && (border.includes('oklab') || border.includes('oklch') || border.includes('var('))) {
                 el.style.setProperty('border-color', '#e5e7eb', 'important');
               }
 
