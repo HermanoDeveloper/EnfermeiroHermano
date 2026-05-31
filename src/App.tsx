@@ -868,7 +868,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Top App Bar */}
-      {currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'ai-assistant' && (
+      {currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'ai-assistant' && currentScreen !== 'subscription' && currentScreen !== 'notifications' && (
         <header className="fixed top-0 left-0 right-0 z-50 glass-effect border-b border-outline-variant/10 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -938,9 +938,9 @@ export default function App() {
       {/* Main Content */}
       <main className={cn(
         "flex-1",
-        currentScreen !== 'login' && currentScreen !== 'signup' ? 
+        currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'ai-assistant' && currentScreen !== 'subscription' && currentScreen !== 'notifications' ? 
           ((currentScreen === 'home' || currentScreen === 'diseases' || currentScreen === 'procedures') ? "pt-[140px] pb-28" : "pt-[80px] pb-28") 
-          : ""
+          : "pt-0 pb-28"
       )}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -3499,21 +3499,50 @@ const getPaymentLogo = (id: string) => {
     case 'emola':
       return (
         <svg viewBox="0 0 100 100" className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm shrink-0">
-          <rect width="100" height="100" fill="#F7941D" />
-          {/* Smartphone outline */}
-          <rect x="24" y="14" width="22" height="38" rx="3" fill="none" stroke="#FFFFFF" strokeWidth="3" />
+          <rect width="100" height="100" fill="#e87722" />
           {/* Antenna */}
-          <line x1="31" y1="14" x2="31" y2="10" stroke="#FFFFFF" strokeWidth="2" />
-          <path d="M28,8 Q31,5 34,8" fill="none" stroke="#FFFFFF" strokeWidth="1.5" />
-          {/* Banknotes */}
-          <g transform="rotate(22 50 26)">
-            <rect x="42" y="14" width="26" height="14" rx="1" fill="#FFFFFF" />
-            <text x="55" y="24" fill="#F7941D" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">$</text>
+          <rect x="32" y="12" width="3" height="6" fill="#FFFFFF" />
+          <path d="M37,13 C38,11.5 39.5,11.5 41,13" fill="none" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" />
+          <path d="M37,9 C39.5,7 42,7 44.5,9" fill="none" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" />
+          
+          {/* Feature Phone Body */}
+          <rect x="25" y="17" width="22" height="39" rx="4" fill="none" stroke="#FFFFFF" strokeWidth="2.8" />
+          
+          {/* Screen border inside phone */}
+          <rect x="28.5" y="21" width="15" height="12" rx="1" fill="none" stroke="#FFFFFF" strokeWidth="2" />
+          
+          {/* Keypad 3x4 grid of small rectangular keys */}
+          {/* Row 1 */}
+          <rect x="29" y="36.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="34.5" y="36.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="40" y="36.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          {/* Row 2 */}
+          <rect x="29" y="40.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="34.5" y="40.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="40" y="40.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          {/* Row 3 */}
+          <rect x="29" y="44.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="34.5" y="44.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="40" y="44.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          {/* Row 4 */}
+          <rect x="29" y="48.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="34.5" y="48.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+          <rect x="40" y="48.5" width="3" height="1.8" rx="0.4" fill="#FFFFFF" />
+
+          {/* Overlapping Banknotes with $ symbol */}
+          <g transform="translate(42, 14) rotate(32)">
+            {/* Back Banknote */}
+            <rect x="4" y="3" width="26" height="15" rx="1.5" fill="#FFFFFF" opacity="0.8" />
+            {/* Front Banknote */}
+            <rect x="0" y="0" width="26" height="15" rx="1.5" fill="#FFFFFF" />
+            {/* Currency Dollar Sign */}
+            <text x="13" y="11.5" fill="#e87722" fontSize="10.5" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">$</text>
           </g>
-          {/* e-Mola Text */}
-          <text x="50" y="72" fill="#FFFFFF" fontSize="15" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">e-Mola</text>
-          {/* Slogan */}
-          <text x="50" y="84" fill="#FFFFFF" fontSize="6.5" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" opacity="0.9">Meu cell, minha mola</text>
+
+          {/* e-Mola Brand Text */}
+          <text x="50" y="74" fill="#FFFFFF" fontSize="17" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" letterSpacing="-0.3">e-Mola</text>
+          {/* Slogan Text */}
+          <text x="50" y="86" fill="#FFFFFF" fontSize="7" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" letterSpacing="-0.1">Meu cell, minha mola</text>
         </svg>
       );
     case 'mkesh':
@@ -3528,8 +3557,11 @@ const getPaymentLogo = (id: string) => {
           <text x="50" y="36" fill="#00A859" fontSize="14" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">:$</text>
           {/* Button */}
           <circle cx="50" cy="51" r="2.5" fill="#FFCC00" />
-          {/* mkesh Text */}
-          <text x="50" y="80" fill="#00A859" fontSize="15" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">mkesh</text>
+          {/* mkesh Text with white 'm' and green 'kesh' */}
+          <text x="50" y="80" fontSize="15" fontWeight="900" fontFamily="sans-serif" textAnchor="middle">
+            <tspan fill="#FFFFFF">m</tspan>
+            <tspan fill="#00A859">kesh</tspan>
+          </text>
         </svg>
       );
     case 'paypal':
