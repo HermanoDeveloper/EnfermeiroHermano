@@ -150,21 +150,21 @@ export interface AIResponse {
 }
 
 export async function askAI(question: string, currentContext?: any): Promise<AIResponse> {
+  const ai = getAI();
+  const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
+
+  // Optimize response speed: simple greetings and navigation commands do not need Google Search.
+  // Disabling the search tool when unnecessary drastically reduces response latency from ~6s to ~1s.
+  const uppercaseQuestion = question.trim().toUpperCase();
+  const isGreetingOrSimple = uppercaseQuestion.match(/^(OLA|OLÁ|BOM DIAS|BOM DIA|BOA TARDE|BOA NOITE|TUDO BEM|TUDO BOM|COMO ESTAS|COMO ESTÁS|HELO|HELLO|HI|OI|QUEM E VOCE|QUEM ÉS|OBRIGADO|OBRIGADA|VALEU)/) ||
+    uppercaseQuestion.includes("TELA") || 
+    uppercaseQuestion.includes("NUCLEO") || 
+    uppercaseQuestion.includes("PERFIL") || 
+    uppercaseQuestion.includes("HISTORICO");
+
+  const tools = isGreetingOrSimple ? undefined : [{ googleSearch: {} }];
+
   try {
-    const ai = getAI();
-    const systemInstruction = `${SYSTEM_INSTRUCTION_BASE}\n\nCONTEXTO ATUAL DO APP:\n${JSON.stringify(currentContext || {})}`;
-
-    // Optimize response speed: simple greetings and navigation commands do not need Google Search.
-    // Disabling the search tool when unnecessary drastically reduces response latency from ~6s to ~1s.
-    const uppercaseQuestion = question.trim().toUpperCase();
-    const isGreetingOrSimple = uppercaseQuestion.match(/^(OLA|OLÁ|BOM DIAS|BOM DIA|BOA TARDE|BOA NOITE|TUDO BEM|TUDO BOM|COMO ESTAS|COMO ESTÁS|HELO|HELLO|HI|OI|QUEM E VOCE|QUEM ÉS|OBRIGADO|OBRIGADA|VALEU)/) ||
-      uppercaseQuestion.includes("TELA") || 
-      uppercaseQuestion.includes("NUCLEO") || 
-      uppercaseQuestion.includes("PERFIL") || 
-      uppercaseQuestion.includes("HISTORICO");
-
-    const tools = isGreetingOrSimple ? undefined : [{ googleSearch: {} }];
-
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: question,
@@ -184,41 +184,64 @@ export async function askAI(question: string, currentContext?: any): Promise<AIR
       suggestions: result.suggestions
     };
   } catch (error: any) {
-    console.error("AI Service Error (askAI):", error);
-    const errorMessage = error?.message || "";
+    console.warn("AI Service call failed (possibly due to Google Search quota or temporary error). Retrying without Search grounding...", error);
     
-    if (error?.isApiKeyMissing || errorMessage.includes("API_KEY")) {
+    if (error?.isApiKeyMissing || (error?.message || "").includes("API_KEY")) {
       return {
         text: "### ⚠️ Erro de Configuração\n\nO Doutor IA precisa de uma chave de API válida para funcionar. \n\n**Ação Necessária:**\nPor favor, adicione a `GEMINI_API_KEY` nas configurações do projeto.",
         suggestions: ["Como configurar a API?", "Falar com suporte"]
       };
     }
 
-    if (errorMessage.includes("quota") || errorMessage.includes("429")) {
+    try {
+      // Retry without Google Search tool
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: question,
+        config: {
+          systemInstruction,
+          tools: undefined, // completely disabled for resilience
+          responseMimeType: "application/json",
+          responseSchema: ASSISTANT_SCHEMA
+        }
+      });
+
+      const result = JSON.parse(response.text.trim());
+      
       return {
-        text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas gratuitas à IA. Por favor, aguarde alguns minutos ou atualize seu plano para acesso ilimitado.",
-        suggestions: ["Ver planos", "Tentar mais tarde"]
+        text: result.text || "Não foi possível processar sua solicitação.",
+        command: result.command,
+        suggestions: result.suggestions
+      };
+    } catch (fallbackError: any) {
+      console.error("AI Service Error on fallback (askAI):", fallbackError);
+      const errorMessage = fallbackError?.message || "";
+
+      if (errorMessage.includes("quota") || errorMessage.includes("429")) {
+        return {
+          text: "### ⏳ Limite de Uso Atingido\n\nO sistema atingiu o limite temporário de consultas da API da Google. Por favor, aguarde alguns minutos e tente novamente. Se puder, considere apoiar o projecto para nos ajudar a manter chaves de alta capacidade!",
+          suggestions: ["Apoiar o projeto", "Tentar mais tarde"]
+        };
+      }
+
+      if (errorMessage.includes("safety") || errorMessage.includes("blocked")) {
+        return {
+          text: "### 🛡️ Conteúdo Restrito\n\nDesculpe, mas não posso processar essa solicitação pois ela acionou os filtros de segurança.",
+          suggestions: ["Reformular pergunta"]
+        };
+      }
+
+      return {
+        text: "### 🔌 Sistema Indisponível\n\nOcorreu um problema técnico inesperado. Por favor, tente novamente em alguns instantes.",
+        suggestions: ["Tentar novamente"]
       };
     }
-
-    if (errorMessage.includes("safety") || errorMessage.includes("blocked")) {
-      return {
-        text: "### 🛡️ Conteúdo Restrito\n\nDesculpe, mas não posso processar essa solicitação pois ela acionou os filtros de segurança.",
-        suggestions: ["Reformular pergunta"]
-      };
-    }
-
-    return {
-      text: "### 🔌 Sistema Indisponível\n\nOcorreu um problema técnico inesperado. Por favor, tente novamente em alguns instantes.",
-      suggestions: ["Tentar novamente"]
-    };
   }
 }
 
 export async function searchDiseaseAI(diseaseName: string): Promise<Disease | null> {
-  try {
-    const ai = getAI();
-    const systemInstruction = `
+  const ai = getAI();
+  const systemInstruction = `
 Você é um especialista médico moçambicano encarregado de fornecer informações precisas e estruturadas sobre a doença "${diseaseName}".
 
 DIRETRIZES DE PESQUISA:
@@ -233,6 +256,7 @@ TEXTO DO FORMULÁRIO NACIONAL DE MEDICAMENTOS (FNM):
 ${MEDICATION_FORM_TEXT}
 `;
 
+  try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
@@ -252,15 +276,36 @@ ${MEDICATION_FORM_TEXT}
     }
     return disease;
   } catch (error) {
-    console.error("Search Disease AI Error:", error);
-    return null;
+    console.warn("searchDiseaseAI failed with googleSearch grounding. Retrying without it...", error);
+    try {
+      const response: GenerateContentResponse = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Pesquise e estruture os dados da doença: ${diseaseName}`,
+        config: {
+          systemInstruction,
+          tools: undefined, // completely disabled for fallback
+          responseMimeType: "application/json",
+          responseSchema: DISEASE_SCHEMA
+        }
+      });
+
+      const disease = JSON.parse(response.text.trim());
+      if (disease) {
+        disease.id = disease.id || `ai-${Date.now()}`;
+        disease.updatedAt = new Date().toISOString();
+        disease.imageUrl = `https://loremflickr.com/1200/600/${encodeURIComponent(disease.name.toLowerCase())},disease,medical`;
+      }
+      return disease;
+    } catch (fallbackError) {
+      console.error("Search Disease AI Error on both attempts:", fallbackError);
+      return null;
+    }
   }
 }
 
 export async function searchProcedureAI(procedureName: string): Promise<Procedure | null> {
-  try {
-    const ai = getAI();
-    const systemInstruction = `
+  const ai = getAI();
+  const systemInstruction = `
 Você é um instrutor de enfermagem moçambicano encarregado de fornecer guias passo a passo precisos sobre o procedimento "${procedureName}".
 
 DIRETRIZES DE PESQUISA:
@@ -271,6 +316,7 @@ MANUAL DE PROCEDIMENTOS BÁSICOS DE ENFERMAGEM:
 ${NURSING_MANUAL_TEXT}
 `;
 
+  try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
@@ -292,7 +338,31 @@ ${NURSING_MANUAL_TEXT}
     }
     return procedure;
   } catch (error) {
-    console.error("AI Procedure Search Error:", error);
-    return null;
+    console.warn("searchProcedureAI failed with googleSearch grounding. Retrying without it...", error);
+    try {
+      const response: GenerateContentResponse = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Pesquise e forneça os detalhes do procedimento: ${procedureName}`,
+        config: {
+          systemInstruction,
+          tools: undefined, // completely disabled for fallback
+          responseMimeType: "application/json",
+          responseSchema: PROCEDURE_SCHEMA
+        }
+      });
+
+      const procedure = JSON.parse(response.text.trim());
+      if (procedure) {
+        procedure.id = procedure.id || `proc-${Date.now()}`;
+        procedure.icon = procedure.icon || 'Activity';
+        procedure.steps = procedure.procedureSteps?.length || 0;
+        procedure.duration = procedure.duration || '15 min';
+        procedure.guideCount = 1;
+      }
+      return procedure;
+    } catch (fallbackError) {
+      console.error("AI Procedure Search Error on both attempts:", fallbackError);
+      return null;
+    }
   }
 }
