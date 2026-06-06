@@ -3724,7 +3724,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
             O aplicativo do <strong>Doutor IA</strong> agora é totalmente gratuito e livre para todos em Moçambique! No entanto, manter os servidores activos e processando respostas de IA em tempo real gera custos diários. 
           </p>
           <p className="text-on-surface-variant text-sm leading-relaxed">
-            Se este projecto tem sido útil para as suas consultas ou estudos de enfermagem/medicina, considere fazer um **apoio voluntário de qualquer valor**. Muito obrigado pelo carinho e suporte! ❤️
+            Se este projecto tem sido útil para as suas consultas ou estudos de enfermagem/medicina, considere fazer um <strong>apoio voluntário de qualquer valor</strong>. Muito obrigado pelo carinho e suporte! ❤️
           </p>
         </div>
 
@@ -3836,7 +3836,7 @@ function SubscriptionScreen({ onBack, profile, onRefreshProfile, isDevEnv, recor
 
         <div className="pt-6 border-t border-outline-variant/10 text-center space-y-2">
           <p className="text-xs text-on-surface-variant font-medium">
-            Desenvolvido localmente por <strong>Hermano Saia</strong> com ❤️ em Moçambique.
+            © 2025 <strong>Xadrek Labs, Inc</strong>. Todos os direitos reservados.
           </p>
           <p className="text-[10px] text-on-surface-variant/60 leading-relaxed">
             As doações são estritamente voluntárias e destinam-se exclusivamente ao pagamento de servidores de hospedagem e cotas de requisição da API Gemini.
